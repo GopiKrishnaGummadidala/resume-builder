@@ -1,0 +1,9 @@
+# One command:  docker compose up -d --build   ->  http://localhost:8090
+services:
+  web:
+    build: .
+    image: craftfolio:latest
+    container_name: craftfolio
+    ports:
+      - "${CRAFTFOLIO_PORT:-8090}:80"
+    restart: unless-stopped

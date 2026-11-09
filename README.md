@@ -1,8 +1,22 @@
 # Craftfolio — CV & Cover Letter Builder
 
-A dependency-free, browser-only CV/resume and cover letter builder (inspired by the feature set reviewed in `../voize-ml-studio/novoresume-research/site-overview.md`).
+A dependency-free, browser-only CV/resume and cover letter builder, inspired by the feature set of online resume builders such as novoresume.com.
 
-## Run
+## Run with Docker Compose
+
+```bash
+docker compose up -d --build
+```
+
+Then open http://localhost:8090. The image is nginx serving the static files.
+
+- Change the port: `CRAFTFOLIO_PORT=9000 docker compose up -d`
+- Rebuild after editing files: `docker compose up -d --build`
+- Stop: `docker compose down`
+
+Documents are saved in each visitor's browser (localStorage), so the container keeps no data and needs no volume.
+
+## Run without Docker
 
 From this folder:
 
@@ -33,6 +47,9 @@ js/data.js          data model, persistence, samples, letter drafting
 js/templates.js     template registry + CV/letter renderers
 js/analysis.js      coach, ATS check, keyword matcher
 js/importer.js      PDF/text import and parsing
+artifact.html       same page for the hosted Claude artifact
+Dockerfile          nginx image; nginx.conf sets JS MIME type and no-cache
+docker-compose.yml  single "web" service on port 8090
 ```
 
 ## Not included (vs. a commercial site)
