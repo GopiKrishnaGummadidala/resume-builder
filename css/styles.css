@@ -297,3 +297,7 @@ select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; ba
 }
 .fmt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .edit-tip { max-width: 794px; margin: 0 auto 10px; color: var(--muted); font-size: 13px; text-align: center; }
+.modal h3 { margin: 0 0 12px; }
+.fn-row { display: flex; align-items: center; gap: 8px; }
+.fn-row input { flex: 1; min-width: 0; }
+.fn-error { color: var(--bad); margin: 8px 0 0; }

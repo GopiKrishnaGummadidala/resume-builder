@@ -123,3 +123,8 @@
 .l-edit:empty::before { content: attr(data-placeholder); color: #9ca3af; font-style: italic; }
 .l-edit h1, .l-edit h2, .l-edit h3, .l-edit h4, .l-edit h5, .l-edit h6 { font-size: 1em; font-weight: 700; margin: 0 0 6px; line-height: 1.4; }
 .l-edit > div { margin: 0 0 8px; }
+/* Single-line fields editable on the page (recipient, date, greeting, closing) */
+.l-field { outline: none; border-radius: 3px; padding: 0 2px; margin: 0 -2px; cursor: text; transition: box-shadow .15s; }
+.l-field:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.l-field:focus { box-shadow: 0 0 0 2px var(--accent); }
+.l-field:empty::before { content: attr(data-placeholder); color: #9ca3af; font-style: italic; }

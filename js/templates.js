@@ -186,17 +186,29 @@ export function renderLetter(l, opts = {}) {
   const blocks = opts.editable
     ? `<div class="l-edit" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Letter body" data-edit="body" data-placeholder="Click here and write your letter…">${letterBlocks(l.body)}</div>`
     : letterBlocks(l.body) || '<p class="l-placeholder">Your letter will appear here…</p>';
+  // In the live preview, single-line fields are editable in place; elsewhere ef() returns the plain text.
+  const ef = (path, html, label) => (opts.editable
+    ? `<span class="l-field" contenteditable="plaintext-only" spellcheck="true" role="textbox" aria-label="${label}" data-edit-field="${path}" data-placeholder="${label}">${html}</span>`
+    : html);
   // "To" and the closing are always printed; empty fields fall back to sensible defaults.
-  const toLines = recipientLines.length ? recipientLines : ['Hiring Manager'];
-  const closing = esc(l.closing?.trim() || 'Sincerely,');
+  let toLines;
+  if (opts.editable) {
+    const nameShown = esc(rec.name) || (recipientLines.length ? '' : 'Hiring Manager');
+    toLines = [ef('recipient.name', nameShown, 'Recipient name'),
+      ...['title', 'company', 'address'].filter(k => rec[k]).map(k => ef(`recipient.${k}`, esc(rec[k]), `Recipient ${k}`))];
+  } else {
+    toLines = recipientLines.length ? recipientLines : ['Hiring Manager'];
+  }
+  const closing = ef('closing', esc(l.closing?.trim() || 'Sincerely,'), 'Closing');
   const signer = esc(l.personal.name) || 'Your Name';
-  const greeting = esc(l.greeting?.trim() || 'Dear Hiring Manager,');
+  const greeting = ef('greeting', esc(l.greeting?.trim() || 'Dear Hiring Manager,'), 'Greeting');
+  const date = ef('date', esc(l.date), 'Date');
   if (t === 'banner') {
     return pageWrap(l, `${header(l.personal, 'banner')}<div class="b-body l-banner">
       <div class="b-to">
         <div class="b-label">To</div><div class="b-rec">${toLines.join('<br>')}</div>
         <div class="b-rule"></div>
-        <div class="b-date">${esc(l.date)}</div>
+        <div class="b-date">${date}</div>
       </div>
       <div class="b-divider"></div>
       <p>${greeting}</p>
@@ -206,7 +218,7 @@ export function renderLetter(l, opts = {}) {
     </div>`);
   }
   const body = `<div class="l-body">
-    <p class="l-date">${esc(l.date)}</p>
+    <p class="l-date">${date}</p>
     <p class="l-to"><span class="l-label">To</span><br>${toLines.join('<br>')}</p>
     ${l.job.role ? `<p class="l-subject"><strong>Re: ${esc(l.job.role)}</strong></p>` : ''}
     <p>${greeting}</p>

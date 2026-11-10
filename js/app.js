@@ -382,7 +382,7 @@ function editorPage(id) {
     <div class="ed-body">
       <div class="ed-form no-print">${doc.type === 'cover' ? letterForm(doc) : resumeForm(doc)}</div>
       <div class="ed-preview">
-        ${doc.type === 'cover' ? '<p class="edit-tip no-print">Click the letter text below to edit it directly. Ctrl+B for bold.</p>' : ''}
+        ${doc.type === 'cover' ? '<p class="edit-tip no-print">Click the letter to edit it directly: recipient, date, greeting, body and closing. Ctrl+B for bold.</p>' : ''}
         <div class="page-fit" id="live">${renderDoc(doc, { editable: true })}</div>
         <p class="overflow-warn" hidden>Content runs past one page — it will continue on page 2 in the PDF.</p>
       </div>
@@ -421,6 +421,7 @@ function mountEditor() {
   root.addEventListener('input', e => {
     const path = e.target.dataset.path;
     if (!path) return;
+    if (path === 'recipient.name' && doc.type === 'cover') syncGreeting(e.target.value);
     setPath(doc, path, e.target.value);
     refresh();
     save();
@@ -457,6 +458,33 @@ function mountEditor() {
       document.execCommand('defaultParagraphSeparator', false, 'p');
     }
   });
+  // Single-line fields on the page (recipient, date, greeting, closing).
+  const greetingFor = name => `Dear ${name || 'Hiring Manager'},`;
+  live.addEventListener('input', e => {
+    const fieldEl = e.target.closest?.('[data-edit-field]');
+    if (!fieldEl) return;
+    const path = fieldEl.dataset.editField;
+    const value = fieldEl.textContent.replace(/\s+/g, ' ').trim();
+    if (path === 'recipient.name') syncGreeting(value);
+    setPath(doc, path, value);
+    const input = $(`.ed-form [data-path="${path}"]`, root);
+    if (input) input.value = value;
+    updateAround();
+    save();
+  });
+  // Keep "Dear …," in step with the recipient name unless the greeting was customised.
+  function syncGreeting(newName) {
+    const auto = !doc.greeting?.trim() || doc.greeting.trim() === greetingFor(doc.recipient.name.trim()) || doc.greeting.trim() === greetingFor('');
+    if (!auto) return;
+    doc.greeting = greetingFor(newName.trim());
+    const g = $('[data-edit-field="greeting"]', live);
+    if (g && document.activeElement !== g) g.textContent = doc.greeting;
+    const gi = $('.ed-form [data-path="greeting"]', root);
+    if (gi) gi.value = doc.greeting;
+  }
+  live.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.closest?.('[data-edit-field]')) { e.preventDefault(); e.target.blur(); }
+  });
   live.addEventListener('input', e => {
     const ed = e.target.closest?.('.l-edit');
     if (!ed) return;
@@ -480,7 +508,7 @@ function mountEditor() {
   });
   live.addEventListener('focusout', e => {
     // Re-render once editing ends so the page shows exactly what will print.
-    if (e.target.classList?.contains('l-edit') && !live.contains(e.relatedTarget)) refresh();
+    if ((e.target.classList?.contains('l-edit') || e.target.dataset?.editField) && !live.contains(e.relatedTarget)) refresh();
   });
   // Keep the selection in the page when pressing the toolbar buttons.
   root.addEventListener('mousedown', e => {
@@ -556,18 +584,85 @@ function mountEditor() {
 
 const pdfName = doc => (doc.personal.name ? `${doc.personal.name} ${doc.type === 'cover' ? 'Cover Letter' : 'CV'}` : doc.title).replace(/[^\w\s-]+/g, '').trim() || 'document';
 
+/** Ask for a file name in-page (prompt() is unavailable when hosted). Resolves the name, or null if cancelled. */
+function fileNameDialog(defaultName) {
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = 'modal-backdrop';
+    wrap.innerHTML = `<form class="modal" role="dialog" aria-modal="true" aria-labelledby="fn-title">
+      <h3 id="fn-title">Download PDF</h3>
+      <label class="field" for="fn-input"><span>File name</span>
+        <div class="fn-row"><input id="fn-input" type="text" value="${esc(defaultName)}" autocomplete="off" spellcheck="false"><span class="muted">.pdf</span></div>
+      </label>
+      <p class="fn-error small" hidden>Enter a file name.</p>
+      <div class="cta-row"><button type="button" class="btn btn-ghost" data-r="0">Cancel</button><button type="submit" class="btn btn-primary">⬇ Download</button></div>
+    </form>`;
+    const input = wrap.querySelector('#fn-input');
+    const done = v => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = e => { if (e.key === 'Escape') done(null); };
+    wrap.querySelector('form').addEventListener('submit', e => {
+      e.preventDefault();
+      // Strip characters Windows/macOS do not allow in file names, and a typed ".pdf".
+      const name = input.value.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\.pdf$/i, '').replace(/\s+/g, ' ').trim();
+      if (!name) { wrap.querySelector('.fn-error').hidden = false; input.focus(); return; }
+      done(`${name}.pdf`);
+    });
+    wrap.addEventListener('click', e => { if (e.target.closest('[data-r="0"]') || e.target === wrap) done(null); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+    input.focus();
+    input.select();
+  });
+}
+
+// PDF standard fonts only encode Latin-1; map common typographic characters for the hidden text layer.
+const latin1 = s => s.replace(/[‘’‚′]/g, "'").replace(/[“”„″]/g, '"').replace(/[–—−]/g, '-').replace(/…/g, '...')
+  .replace(/[•·▪●]/g, '-').replace(/ /g, ' ').replace(/[^\x20-\xff]/g, '');
+
+/**
+ * Add invisible, selectable text over the page image, word by word, so the PDF can be searched,
+ * copied and read by applicant tracking systems while looking exactly like the preview.
+ */
+function addTextLayer(pdf, page, pageCssH, ptPerPx) {
+  const origin = page.getBoundingClientRect();
+  const walker = document.createTreeWalker(page, NodeFilter.SHOW_TEXT, {
+    acceptNode: n => (n.nodeValue.trim() && !n.parentElement.closest('svg') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+  });
+  const range = document.createRange();
+  pdf.setFont('helvetica', 'normal');
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const style = getComputedStyle(node.parentElement);
+    const upper = style.textTransform === 'uppercase';
+    for (const m of node.nodeValue.matchAll(/\S+/g)) {
+      range.setStart(node, m.index);
+      range.setEnd(node, m.index + m[0].length);
+      const r = range.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      const word = latin1(upper ? m[0].toUpperCase() : m[0]);
+      if (!word) continue;
+      const top = r.top - origin.top;
+      const pageNo = Math.floor(top / pageCssH);
+      const yPx = top - pageNo * pageCssH + r.height * 0.78; // approximate baseline
+      pdf.setPage(pageNo + 1);
+      const sizePt = Math.max(4, r.height * 0.75 * ptPerPx);
+      pdf.setFontSize(sizePt);
+      // Stretch the invisible word to the width it has on screen so selections line up.
+      const natural = pdf.getTextWidth(word);
+      const target = r.width * ptPerPx;
+      // Trailing space keeps words apart when the PDF's text is copied or parsed.
+      pdf.text(`${word} `, (r.left - origin.left) * ptPerPx, yPx * ptPerPx, {
+        renderingMode: 'invisible',
+        horizontalScale: natural ? Math.min(3, Math.max(0.3, target / natural)) : 1,
+      });
+    }
+  }
+}
+
 async function downloadPdf(doc, btn) {
+  const filename = await fileNameDialog(pdfName(doc));
+  if (!filename) return;
   const area = $('#print-area');
   area.innerHTML = renderDoc(doc);
-  if (!hosted()) {
-    // Local: the browser's own print-to-PDF keeps text selectable.
-    const prevTitle = document.title;
-    document.title = pdfName(doc);
-    toast('In the print dialog choose “Save as PDF”');
-    setTimeout(() => { window.print(); document.title = prevTitle; }, 50);
-    return;
-  }
-  // Hosted: printing is blocked, so render the page to a PDF in the browser.
   const label = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = 'Building PDF…'; }
   try {
@@ -581,7 +676,8 @@ async function downloadPdf(doc, btn) {
       scale: 2, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0,
       width: PAGE_W, height: fullH, windowWidth: PAGE_W, windowHeight: fullH, // capture the whole page, not just the visible frame
     });
-    const pdf = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    const pdf = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4', compress: true });
+    pdf.setProperties({ title: filename.replace(/\.pdf$/, ''), author: doc.personal.name || '', creator: 'Craftfolio' });
     const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
     const sliceH = Math.floor(canvas.width * (ph / pw)); // canvas px per PDF page
     for (let y = 0, n = 0; y < canvas.height - 4; y += sliceH, n++) {
@@ -592,7 +688,8 @@ async function downloadPdf(doc, btn) {
       if (n) pdf.addPage();
       pdf.addImage(part.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, pw, part.height * (pw / canvas.width));
     }
-    await saveFile(`${pdfName(doc)}.pdf`, pdf.output('blob'));
+    addTextLayer(pdf, page, PAGE_W * (ph / pw), pw / PAGE_W);
+    if (await saveFile(filename, pdf.output('blob')) && !hosted()) toast(`Downloaded ${filename}`);
   } catch (err) {
     toast(`PDF failed: ${err.message}`);
   } finally {
