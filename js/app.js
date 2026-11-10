@@ -2,6 +2,7 @@ import { store, blankResume, sampleResume, blankLetter, sampleLetter, draftLette
 import { TEMPLATES, TEMPLATE_FILTERS, renderDoc, renderResume, renderLetter, esc } from './templates.js';
 import { coachResume, coachLetter, atsCheck, matchJob, strengthenBullet } from './analysis.js';
 import { fileToText, parseResumeText } from './importer.js';
+import { htmlToLetterText, toggleBold, toggleHeading } from './richtext.js';
 
 const app = document.getElementById('app');
 const PAGE_W = 794; // A4 at 96dpi
@@ -337,7 +338,12 @@ function letterForm(l) {
       <div class="grid2">
         ${field('Date', 'date', l)}
         ${field('Greeting', 'greeting', l)}
-        ${field('Body', 'body', l, { textarea: true, rows: 16, full: true, ph: 'Opening: the role and why you are excited.\n\n# Sub-heading\nAn achievement that proves you can do the job.\n\nClose: thank them and ask for a conversation.', hint: 'Blank line = new paragraph · start a line with “# ” for a bold sub-heading · **bold** for emphasis' })}
+        <div class="fmt-bar full" role="toolbar" aria-label="Letter formatting">
+          <button type="button" class="btn btn-sm btn-ghost" data-act="fmt-bold" title="Bold the selected text (Ctrl+B)"><strong>B</strong> Bold</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-act="fmt-heading" title="Make the selected line a bold sub-heading">Heading</button>
+          <span class="muted small">Pasting from Word or Google Docs keeps bold text.</span>
+        </div>
+        ${field('Body', 'body', l, { textarea: true, rows: 16, full: true, ph: 'Opening: the role and why you are excited.\n\n# Sub-heading\nAn achievement that proves you can do the job.\n\nClose: thank them and ask for a conversation.', hint: 'Blank line = new paragraph · a line starting with “# ” is a bold sub-heading · **text** is bold' })}
         ${field('Closing', 'closing', l, { ph: 'Sincerely,', hint: 'Printed above your name at the bottom of the letter' })}
       </div>`),
     group('Your details', 'personal', `${resumes.length ? `<button class="btn btn-sm btn-ghost" data-act="copy-personal">Copy details from my CV</button>` : ''}${personalFields(l)}`, !l.personal.name),
@@ -414,6 +420,26 @@ function mountEditor() {
     refresh();
     save();
   });
+
+  // Letter body: keep bold when pasting formatted text, and Ctrl/Cmd+B to bold the selection.
+  const bodyBox = () => $('[data-path="body"]', root);
+  root.addEventListener('paste', e => {
+    if (e.target !== bodyBox()) return;
+    const html = e.clipboardData?.getData('text/html');
+    if (!html) return; // plain text: let the browser paste normally
+    const text = htmlToLetterText(html);
+    if (text == null) return;
+    e.preventDefault();
+    e.target.setRangeText(text, e.target.selectionStart, e.target.selectionEnd, 'end');
+    e.target.dispatchEvent(new Event('input', { bubbles: true }));
+    toast('Pasted with bold text kept');
+  });
+  root.addEventListener('keydown', e => {
+    if (e.target === bodyBox() && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      toggleBold(e.target);
+    }
+  });
   root.addEventListener('change', e => {
     const role = e.target.dataset.role;
     if (role === 'template') doc.templateId = e.target.value;
@@ -462,6 +488,9 @@ function mountEditor() {
         rerenderForm();
         toast('Draft written. Personalise it before sending.');
       });
+    } else if (act === 'fmt-bold' || act === 'fmt-heading') {
+      const ta = bodyBox();
+      if (ta) (act === 'fmt-bold' ? toggleBold : toggleHeading)(ta);
     } else if (act === 'reset-personal') {
       doc.personal = { ...DEFAULT_PERSONAL };
       rerenderForm();

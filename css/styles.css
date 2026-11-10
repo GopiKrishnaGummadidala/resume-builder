@@ -295,3 +295,4 @@ select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; ba
   .tpl-modern .r-cols { min-height: 297mm; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.fmt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
