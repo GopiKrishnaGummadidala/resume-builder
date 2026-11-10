@@ -296,3 +296,4 @@ select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; ba
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 .fmt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.edit-tip { max-width: 794px; margin: 0 auto 10px; color: var(--muted); font-size: 13px; text-align: center; }

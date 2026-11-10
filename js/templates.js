@@ -59,7 +59,7 @@ function iconContacts(p) {
 const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
 /** Letter body: blank line = new paragraph, a line starting with "# " = bold sub-heading. */
-function letterBlocks(body) {
+export function letterBlocks(body) {
   const out = [];
   let para = [];
   const flush = () => { if (para.length) out.push(`<p>${para.map(inline).join('<br>')}</p>`); para = []; };
@@ -175,11 +175,17 @@ export function renderResume(r) {
   return pageWrap(r, header(r.personal) + order.join(''));
 }
 
-export function renderLetter(l) {
+/**
+ * @param {object} l letter
+ * @param {{editable?: boolean}} [opts] editable: render the body as an in-page editor (live preview only, never print/PDF)
+ */
+export function renderLetter(l, opts = {}) {
   const t = l.templateId;
   const rec = l.recipient;
   const recipientLines = [rec.name, rec.title, rec.company, rec.address].filter(Boolean).map(esc);
-  const blocks = letterBlocks(l.body) || '<p class="l-placeholder">Your letter will appear here…</p>';
+  const blocks = opts.editable
+    ? `<div class="l-edit" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Letter body" data-edit="body" data-placeholder="Click here and write your letter…">${letterBlocks(l.body)}</div>`
+    : letterBlocks(l.body) || '<p class="l-placeholder">Your letter will appear here…</p>';
   // "To" and the closing are always printed; empty fields fall back to sensible defaults.
   const toLines = recipientLines.length ? recipientLines : ['Hiring Manager'];
   const closing = esc(l.closing?.trim() || 'Sincerely,');
@@ -216,4 +222,4 @@ export function renderLetter(l) {
   return pageWrap(l, header(l.personal) + body);
 }
 
-export const renderDoc = d => (d.type === 'cover' ? renderLetter(d) : renderResume(d));
+export const renderDoc = (d, opts) => (d.type === 'cover' ? renderLetter(d, opts) : renderResume(d));

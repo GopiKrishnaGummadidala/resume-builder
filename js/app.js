@@ -1,8 +1,8 @@
 import { store, blankResume, sampleResume, blankLetter, sampleLetter, draftLetterBody, resumeToText, THEME_COLORS, FONTS, uid, splitLines, DEFAULT_PERSONAL } from './data.js';
-import { TEMPLATES, TEMPLATE_FILTERS, renderDoc, renderResume, renderLetter, esc } from './templates.js';
+import { TEMPLATES, TEMPLATE_FILTERS, renderDoc, renderResume, renderLetter, esc, letterBlocks } from './templates.js';
 import { coachResume, coachLetter, atsCheck, matchJob, strengthenBullet } from './analysis.js';
 import { fileToText, parseResumeText } from './importer.js';
-import { htmlToLetterText, toggleBold, toggleHeading } from './richtext.js';
+import { htmlToLetterText, editableToLetterText, toggleBold, toggleHeading, editableBold, editableHeading } from './richtext.js';
 
 const app = document.getElementById('app');
 const PAGE_W = 794; // A4 at 96dpi
@@ -341,7 +341,7 @@ function letterForm(l) {
         <div class="fmt-bar full" role="toolbar" aria-label="Letter formatting">
           <button type="button" class="btn btn-sm btn-ghost" data-act="fmt-bold" title="Bold the selected text (Ctrl+B)"><strong>B</strong> Bold</button>
           <button type="button" class="btn btn-sm btn-ghost" data-act="fmt-heading" title="Make the selected line a bold sub-heading">Heading</button>
-          <span class="muted small">Pasting from Word or Google Docs keeps bold text.</span>
+          <span class="muted small">Or edit the letter directly on the page. Pasting from Word or Google Docs keeps bold.</span>
         </div>
         ${field('Body', 'body', l, { textarea: true, rows: 16, full: true, ph: 'Opening: the role and why you are excited.\n\n# Sub-heading\nAn achievement that proves you can do the job.\n\nClose: thank them and ask for a conversation.', hint: 'Blank line = new paragraph · a line starting with “# ” is a bold sub-heading · **text** is bold' })}
         ${field('Closing', 'closing', l, { ph: 'Sincerely,', hint: 'Printed above your name at the bottom of the letter' })}
@@ -382,7 +382,8 @@ function editorPage(id) {
     <div class="ed-body">
       <div class="ed-form no-print">${doc.type === 'cover' ? letterForm(doc) : resumeForm(doc)}</div>
       <div class="ed-preview">
-        <div class="page-fit" id="live">${renderDoc(doc)}</div>
+        ${doc.type === 'cover' ? '<p class="edit-tip no-print">Click the letter text below to edit it directly. Ctrl+B for bold.</p>' : ''}
+        <div class="page-fit" id="live">${renderDoc(doc, { editable: true })}</div>
         <p class="overflow-warn" hidden>Content runs past one page — it will continue on page 2 in the PDF.</p>
       </div>
       <aside class="ed-coach no-print" id="coach">${coachPanel(doc)}</aside>
@@ -397,12 +398,16 @@ function mountEditor() {
   const live = $('#live');
   ro.observe(live);
 
-  const refresh = () => {
-    live.innerHTML = renderDoc(doc);
+  // Size, overflow warning and coach — everything except re-rendering the page itself.
+  const updateAround = () => {
     fitPages(root);
     const page = $('.page', live);
     $('.overflow-warn', root).hidden = page.scrollHeight <= PAGE_H + 2;
     $('#coach').innerHTML = coachPanel(doc);
+  };
+  const refresh = () => {
+    live.innerHTML = renderDoc(doc, { editable: true });
+    updateAround();
   };
   const save = debounce(() => store.update(doc), 300);
   const rerenderForm = () => {
@@ -439,6 +444,47 @@ function mountEditor() {
       e.preventDefault();
       toggleBold(e.target);
     }
+  });
+
+  // In-page editing of the letter body (the preview itself). The page is not re-rendered while
+  // typing there, so the caret stays put; the form's Body box is kept in sync.
+  let lastEditor = null; // body textarea or in-page editor, whichever was used last (for the B / Heading buttons)
+  const pageEditor = () => $('.l-edit', live);
+  root.addEventListener('focusin', e => {
+    if (e.target === bodyBox()) lastEditor = e.target;
+    else if (e.target.classList?.contains('l-edit')) {
+      lastEditor = e.target;
+      document.execCommand('defaultParagraphSeparator', false, 'p');
+    }
+  });
+  live.addEventListener('input', e => {
+    const ed = e.target.closest?.('.l-edit');
+    if (!ed) return;
+    doc.body = editableToLetterText(ed);
+    const ta = bodyBox();
+    if (ta) ta.value = doc.body;
+    updateAround();
+    save();
+  });
+  live.addEventListener('paste', e => {
+    const ed = e.target.closest?.('.l-edit');
+    if (!ed) return;
+    e.preventDefault(); // never insert the source's fonts and colours; keep only text, paragraphs and bold
+    const html = e.clipboardData?.getData('text/html');
+    const markup = (html && htmlToLetterText(html)) ?? (e.clipboardData?.getData('text/plain') || '');
+    if (!markup.trim()) return;
+    let frag = letterBlocks(markup);
+    const single = /^<p>(?:(?!<p>)[\s\S])*<\/p>$/.test(frag);
+    if (single) frag = frag.slice(3, -4); // one paragraph: insert inline instead of splitting the current one
+    document.execCommand('insertHTML', false, frag);
+  });
+  live.addEventListener('focusout', e => {
+    // Re-render once editing ends so the page shows exactly what will print.
+    if (e.target.classList?.contains('l-edit') && !live.contains(e.relatedTarget)) refresh();
+  });
+  // Keep the selection in the page when pressing the toolbar buttons.
+  root.addEventListener('mousedown', e => {
+    if (e.target.closest('[data-act="fmt-bold"], [data-act="fmt-heading"]') && lastEditor?.classList?.contains('l-edit')) e.preventDefault();
   });
   root.addEventListener('change', e => {
     const role = e.target.dataset.role;
@@ -489,8 +535,9 @@ function mountEditor() {
         toast('Draft written. Personalise it before sending.');
       });
     } else if (act === 'fmt-bold' || act === 'fmt-heading') {
-      const ta = bodyBox();
-      if (ta) (act === 'fmt-bold' ? toggleBold : toggleHeading)(ta);
+      const ed = pageEditor();
+      if (ed && lastEditor === ed) (act === 'fmt-bold' ? editableBold : editableHeading)(ed);
+      else if (bodyBox()) (act === 'fmt-bold' ? toggleBold : toggleHeading)(bodyBox());
     } else if (act === 'reset-personal') {
       doc.personal = { ...DEFAULT_PERSONAL };
       rerenderForm();

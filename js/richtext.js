@@ -1,25 +1,23 @@
 // Letter-body formatting helpers.
-// The body is plain text with light markup: "**bold**" and lines starting with "# " for bold sub-headings.
-// These helpers keep bold when pasting from Word / Google Docs / web pages, and power the B / Heading buttons.
+// The body is stored as plain text with light markup: "**bold**" and lines starting with "# " for bold sub-headings.
+// These helpers convert to that markup from pasted HTML and from the in-page editor, and power the Bold / Heading controls.
 
 const BLOCK = new Set(['P', 'DIV', 'SECTION', 'ARTICLE', 'LI', 'UL', 'OL', 'TABLE', 'TR', 'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
 const SKIP = new Set(['STYLE', 'SCRIPT', 'HEAD', 'META', 'TITLE', 'XML']);
 
-function isBold(el) {
+function boldOf(el, inherited) {
   const w = el.style?.fontWeight;
   if (w) return w === 'bold' || w === 'bolder' || parseInt(w, 10) >= 600; // Google Docs wraps all in <b style="font-weight:normal">
-  return el.tagName === 'B' || el.tagName === 'STRONG';
+  if (el.tagName === 'B' || el.tagName === 'STRONG') return true;
+  return inherited;
 }
 
-/** Convert pasted HTML into body markup. Returns null when the HTML carries no bold or headings worth keeping. */
-export function htmlToLetterText(html) {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  let found = false;
-  const blocks = []; // [{ text, heading, allBold }]
+/** Walk a DOM tree into blocks of text runs: [{ parts: [{t, bold}], heading }]. */
+function collectBlocks(rootNode) {
+  const blocks = [];
   let cur = null;
   const open = () => { if (!cur) { cur = { parts: [], heading: false }; blocks.push(cur); } return cur; };
   const close = () => { cur = null; };
-
   const walk = (node, bold) => {
     if (node.nodeType === Node.TEXT_NODE) {
       const t = node.nodeValue.replace(/\s+/g, ' ');
@@ -28,44 +26,64 @@ export function htmlToLetterText(html) {
     }
     if (node.nodeType !== Node.ELEMENT_NODE || SKIP.has(node.tagName)) return;
     const tag = node.tagName;
-    if (tag === 'BR') { open().parts.push({ t: '\n', bold: false }); return; }
+    if (tag === 'BR') { if (cur) cur.parts.push({ t: '\n', bold: false }); return; }
     const heading = /^H[1-6]$/.test(tag);
-    const b = heading ? false : (node.style?.fontWeight || tag === 'B' || tag === 'STRONG') ? isBold(node) : bold;
+    const b = heading ? false : boldOf(node, bold);
     if (BLOCK.has(tag)) close();
-    if (heading) { open().heading = true; found = true; }
+    if (heading) open().heading = true;
     node.childNodes.forEach(c => walk(c, b));
     if (BLOCK.has(tag)) close();
   };
-  walk(doc.body, false);
+  rootNode.childNodes.forEach(c => walk(c, false));
+  return blocks;
+}
 
+const tidy = s => s.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim();
+
+/** One block's text with bold runs wrapped in ** (surrounding spaces kept outside the markers). */
+function blockMarkup(blk) {
+  const runs = [];
+  blk.parts.forEach(p => {
+    const last = runs[runs.length - 1];
+    if (last && last.bold === p.bold) last.t += p.t; else runs.push({ ...p });
+  });
+  return tidy(runs.map(r => {
+    if (!r.bold || !r.t.trim()) return r.t;
+    const lead = r.t.match(/^\s*/)[0], trail = r.t.match(/\s*$/)[0];
+    return `${lead}**${r.t.trim()}**${trail}`;
+  }).join(''));
+}
+
+/** Headings sit directly above their paragraph; other blocks are separated by a blank line. */
+const joinBlocks = lines => lines.reduce((acc, line, i) => acc + (i === 0 ? '' : lines[i - 1].startsWith('# ') ? '\n' : '\n\n') + line, '');
+
+/** Convert pasted HTML into body markup. Returns null when the HTML carries no bold or headings worth keeping. */
+export function htmlToLetterText(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const blocks = collectBlocks(doc.body);
+  let found = false;
   const out = [];
   for (const blk of blocks) {
     const visible = blk.parts.filter(p => p.t.trim());
     if (!visible.length) continue;
+    if (blk.heading || visible.some(p => p.bold)) found = true;
     const allBold = visible.every(p => p.bold);
-    if (visible.some(p => p.bold)) found = true;
-    const plain = blk.parts.map(p => p.t).join('').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim();
+    const plain = tidy(blk.parts.map(p => p.t).join(''));
     // A short, fully-bold paragraph reads as a sub-heading, like in a formatted cover letter.
-    if (blk.heading || (allBold && plain.length <= 90 && !plain.includes('\n') && !/[.!?:]$/.test(plain))) {
-      out.push(`# ${plain}`);
-      continue;
-    }
-    // Merge adjacent runs, then wrap bold runs in ** (keeping surrounding spaces outside the markers).
-    const runs = [];
-    blk.parts.forEach(p => {
-      const last = runs[runs.length - 1];
-      if (last && last.bold === p.bold) last.t += p.t; else runs.push({ ...p });
-    });
-    const text = runs.map(r => {
-      if (!r.bold || !r.t.trim()) return r.t;
-      const lead = r.t.match(/^\s*/)[0], trail = r.t.match(/\s*$/)[0];
-      return `${lead}**${r.t.trim()}**${trail}`;
-    }).join('');
-    out.push(text.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim());
+    if (blk.heading || (allBold && plain.length <= 90 && !plain.includes('\n') && !/[.!?:]$/.test(plain))) out.push(`# ${plain}`);
+    else out.push(blockMarkup(blk));
   }
-  if (!found) return null;
-  // Headings sit directly above their paragraph; other blocks are separated by a blank line.
-  return out.reduce((acc, line, i) => acc + (i === 0 ? '' : out[i - 1].startsWith('# ') ? '\n' : '\n\n') + line, '');
+  return found ? joinBlocks(out) : null;
+}
+
+/** Convert the in-page editor's DOM back to body markup (exact: no heading guessing). */
+export function editableToLetterText(el) {
+  const out = [];
+  for (const blk of collectBlocks(el)) {
+    if (!blk.parts.some(p => p.t.trim())) continue;
+    out.push(blk.heading ? `# ${tidy(blk.parts.map(p => p.t).join('')).replace(/\n/g, ' ')}` : blockMarkup(blk));
+  }
+  return joinBlocks(out);
 }
 
 /** Replace the textarea selection and notify the editor. */
@@ -75,7 +93,7 @@ function replaceSelection(ta, text, selStart, selEnd) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-/** Toggle **bold** around the selection (or insert empty markers at the cursor). */
+/** Toggle **bold** around the textarea selection (or insert empty markers at the cursor). */
 export function toggleBold(ta) {
   const { selectionStart: s, selectionEnd: e, value: v } = ta;
   const sel = v.slice(s, e);
@@ -91,7 +109,7 @@ export function toggleBold(ta) {
   }
 }
 
-/** Toggle "# " sub-heading on every line touched by the selection. */
+/** Toggle "# " sub-heading on every textarea line touched by the selection. */
 export function toggleHeading(ta) {
   const { selectionStart: s, selectionEnd: e, value: v } = ta;
   const start = v.lastIndexOf('\n', s - 1) + 1;
@@ -103,4 +121,15 @@ export function toggleHeading(ta) {
   ta.focus();
   ta.setSelectionRange(start, end);
   replaceSelection(ta, next, start, start + next.length);
+}
+
+/** Bold / heading inside the in-page editor (contenteditable). */
+export function editableBold(el) {
+  el.focus();
+  document.execCommand('bold');
+}
+export function editableHeading(el) {
+  el.focus();
+  const block = (document.queryCommandValue('formatBlock') || '').toLowerCase();
+  document.execCommand('formatBlock', false, /^h[1-6]$/.test(block) ? 'p' : 'h4');
 }
