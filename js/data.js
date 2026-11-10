@@ -16,7 +16,18 @@ export const FONTS = [
 
 export const DEFAULT_TEMPLATE = 'banner';
 export const DEFAULT_THEME = () => ({ color: THEME_COLORS[0], font: 'hind' });
-const blankPersonal = () => ({ name: '', title: '', email: '', phone: '', location: '', website: '', linkedin: '', github: '' });
+const EMPTY_PERSONAL = { name: '', title: '', email: '', phone: '', location: '', website: '', linkedin: '', github: '' };
+
+// Optional per-user defaults from js/profile.local.js (git-ignored; see profile.example.js).
+// If the file is missing, new documents start with empty details.
+let localProfile = {};
+try {
+  localProfile = (await import('./profile.local.js')).default || {};
+} catch { /* no local profile */ }
+export const DEFAULT_PERSONAL = Object.freeze(
+  Object.fromEntries(Object.keys(EMPTY_PERSONAL).map(k => [k, String(localProfile[k] ?? '')]))
+);
+const blankPersonal = () => ({ ...DEFAULT_PERSONAL });
 
 /** "5 November, 2026" */
 export function formatDate(d = new Date()) {

@@ -1,4 +1,4 @@
-import { store, blankResume, sampleResume, blankLetter, sampleLetter, draftLetterBody, resumeToText, THEME_COLORS, FONTS, uid, splitLines } from './data.js';
+import { store, blankResume, sampleResume, blankLetter, sampleLetter, draftLetterBody, resumeToText, THEME_COLORS, FONTS, uid, splitLines, DEFAULT_PERSONAL } from './data.js';
 import { TEMPLATES, TEMPLATE_FILTERS, renderDoc, renderResume, renderLetter, esc } from './templates.js';
 import { coachResume, coachLetter, atsCheck, matchJob, strengthenBullet } from './analysis.js';
 import { fileToText, parseResumeText } from './importer.js';
@@ -262,8 +262,13 @@ function listItem(doc, listKey, i, title, inner) {
   </div>`;
 }
 
+const hasDefaults = () => Object.values(DEFAULT_PERSONAL).some(Boolean);
+
 function personalFields(doc) {
-  return `<div class="grid2">
+  const reset = hasDefaults()
+    ? `<div><button class="btn btn-sm btn-ghost" data-act="reset-personal" title="Fill name, phone, email and links with your saved defaults">↺ Reset to my details</button></div>`
+    : '';
+  return `${reset}<div class="grid2">
     ${field('Full name', 'personal.name', doc, { ph: 'Jordan Rivera' })}
     ${field('Headline / job title', 'personal.title', doc, { ph: 'Senior Product Designer' })}
     ${field('Email', 'personal.email', doc, { type: 'email', ph: 'you@example.com' })}
@@ -457,6 +462,10 @@ function mountEditor() {
         rerenderForm();
         toast('Draft written. Personalise it before sending.');
       });
+    } else if (act === 'reset-personal') {
+      doc.personal = { ...DEFAULT_PERSONAL };
+      rerenderForm();
+      toast('Restored your default details');
     } else if (act === 'copy-personal') {
       const src = store.state.docs.find(d => d.type !== 'cover');
       if (src) { doc.personal = { ...src.personal }; rerenderForm(); toast(`Copied details from “${src.title}”`); }

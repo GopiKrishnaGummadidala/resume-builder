@@ -16,6 +16,12 @@ Then open http://localhost:8090. The image is nginx serving the static files.
 
 Documents are saved in each visitor's browser (localStorage), so the container keeps no data and needs no volume.
 
+## Your default details
+
+New CVs and cover letters start with the name, headline, email, phone, location and links from `js/profile.local.js`. Every field stays editable per document, and **↺ Reset to my details** in the Personal details section restores them.
+
+The file is git-ignored so your contact details stay out of the repo. To set it up on another machine, copy `js/profile.example.js` to `js/profile.local.js` and fill it in. Without it, new documents start empty. Docker builds include it, so rebuild after editing: `docker compose up -d --build`.
+
 ## Run without Docker
 
 From this folder:
