@@ -1,0 +1,22 @@
+{
+  "name": "craftfolio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-only CV and cover letter builder",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "node --test tests/unit/",
+    "test:e2e": "playwright test",
+    "serve": "node scripts/serve.mjs",
+    "load": "node scripts/load-test.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0"
+  }
+}

@@ -6,3 +6,8 @@ Thumbs.db
 
 # Personal default details (kept out of git)
 js/profile.local.js
+
+# Tooling
+node_modules/
+test-results/
+playwright-report/
