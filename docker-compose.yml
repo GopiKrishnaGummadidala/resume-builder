@@ -5,5 +5,13 @@ services:
     image: craftfolio:latest
     container_name: craftfolio
     ports:
-      - "${CRAFTFOLIO_PORT:-8090}:80"
+      - "${CRAFTFOLIO_PORT:-8090}:8080"
     restart: unless-stopped
+    # The container only serves files, so it gets no write access and no extra privileges.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

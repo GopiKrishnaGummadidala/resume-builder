@@ -1,6 +1,18 @@
+# Only index.html, artifact.html, css/, js/ and nginx.conf are needed in the image.
 .git
+.github
 .gitignore
 .dockerignore
 Dockerfile
 docker-compose.yml
 README.md
+docs
+tests
+scripts
+node_modules
+package.json
+package-lock.json
+eslint.config.js
+playwright.config.js
+playwright-report
+test-results
