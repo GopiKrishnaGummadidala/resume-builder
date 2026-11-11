@@ -67,7 +67,10 @@ jobs:
           set -euo pipefail
           base=http://localhost:8090
           check() { # path, expected status, expected content type prefix
-            read -r code type < <(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$base$1")
+            local out code type
+            out=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$base$1")
+            code=${out%% *}
+            type=${out#* }
             echo "$1 -> $code $type"
             [ "$code" = "$2" ] || { echo "expected status $2"; exit 1; }
             case "$type" in "$3"*) ;; *) echo "expected type $3"; exit 1 ;; esac
