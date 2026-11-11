@@ -1,5 +1,5 @@
 // Rule-based resume coach, ATS checker and job matcher. Runs fully in the browser.
-import { splitLines, splitList, resumeToText } from './data.js';
+import { splitLines, splitList } from './data.js';
 import { TEMPLATES } from './templates.js';
 
 const ACTION_VERBS = new Set(`accelerated achieved acquired adapted administered advised analyzed architected assessed automated balanced boosted built captured championed coached collaborated completed conceived conducted consolidated coordinated created cultivated cut decreased defined delivered deployed designed developed devised directed doubled drove eliminated enabled engineered enhanced established evaluated exceeded executed expanded facilitated forecasted founded generated grew guided headed identified implemented improved increased influenced initiated innovated launched led leveraged maintained managed maximized mentored migrated modernized negotiated optimized orchestrated organized overhauled oversaw partnered performed pioneered planned prioritized produced programmed promoted proposed published ran rebuilt redesigned reduced refactored resolved restructured revamped saved scaled secured shipped simplified spearheaded standardized streamlined strengthened supervised supported surpassed taught tested trained transformed tripled unified upgraded won wrote`.split(/\s+/));
@@ -202,4 +202,3 @@ export function matchJob(resumeText, jd) {
   return result;
 }
 
-export { resumeToText };

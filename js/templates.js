@@ -1,6 +1,9 @@
 // Document templates. Each template renders a CV and a matching cover letter into an A4 ".page".
 import { FONTS, splitLines, splitList } from './data.js';
 
+/** A4 page size in CSS pixels at 96 dpi. */
+export const PAGE = Object.freeze({ W: 794, H: 1123 });
+
 export const TEMPLATES = [
   { id: 'banner', name: 'Banner', tags: ['ats', 'single'], desc: 'Two-tone header band with an icon contact row. Letters get bold section sub-headings.' },
   { id: 'classic', name: 'Classic', tags: ['ats', 'single'], desc: 'Centered header, single column. Safest choice for applicant tracking systems.' },

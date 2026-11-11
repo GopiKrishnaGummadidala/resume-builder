@@ -1,6 +1,4 @@
-// Data model, persistence and sample content.
-
-const STORAGE_KEY = 'craftfolio.v1';
+// Data model: document shapes, defaults, validation and sample content. No DOM or storage access here.
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -14,6 +12,8 @@ export const FONTS = [
   { id: 'merri', label: 'Merriweather', css: "'Merriweather', Georgia, serif" },
 ];
 
+/** Template ids the model accepts. templates.js renders exactly these (enforced by a unit test). */
+export const TEMPLATE_IDS = ['banner', 'classic', 'minimal', 'executive', 'tech', 'modern', 'compact'];
 export const DEFAULT_TEMPLATE = 'banner';
 export const DEFAULT_THEME = () => ({ color: THEME_COLORS[0], font: 'hind' });
 const EMPTY_PERSONAL = { name: '', title: '', email: '', phone: '', location: '', website: '', linkedin: '', github: '' };
@@ -171,39 +171,6 @@ function estimateYears(r) {
 const lowerFirst = s => s.charAt(0).toLowerCase() + s.slice(1).replace(/[.;]$/, '');
 const joinNatural = a => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`);
 
-function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.docs)) return parsed;
-    }
-  } catch { /* storage unavailable */ }
-  return { docs: [] };
-}
-
-export const store = {
-  state: load(),
-  save() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); } catch { /* ignore */ }
-  },
-  get(id) { return this.state.docs.find(d => d.id === id); },
-  add(doc) { this.state.docs.unshift(doc); this.save(); return doc; },
-  update(doc) { doc.updatedAt = Date.now(); this.save(); },
-  remove(id) { this.state.docs = this.state.docs.filter(d => d.id !== id); this.save(); },
-  duplicate(id) {
-    const src = this.get(id);
-    if (!src) return null;
-    const copy = structuredClone(src);
-    copy.id = uid();
-    copy.title = `${src.title} (copy)`;
-    (copy.experience || []).forEach(e => (e.id = uid()));
-    (copy.education || []).forEach(e => (e.id = uid()));
-    (copy.projects || []).forEach(e => (e.id = uid()));
-    return this.add(copy);
-  },
-};
-
 /** Convert a resume into plain text (used by ATS checker and job matcher). */
 export function resumeToText(r) {
   const p = r.personal;
@@ -232,3 +199,64 @@ export function resumeToText(r) {
 
 export const splitLines = s => (s || '').split('\n').map(x => x.trim().replace(/^[-•*]\s*/, '')).filter(Boolean);
 export const splitList = s => (s || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean);
+
+// ---------- validation ----------
+// Everything that enters the app from outside (localStorage, an imported JSON file) passes through
+// normalizeDoc, so the rest of the code can rely on the shape and on values being plain strings.
+
+const LIMITS = { short: 300, long: 5000, body: 20000, items: 50 };
+// Text comes from strings; numbers and booleans are converted; anything else (objects, arrays) becomes ''.
+const str = (v, max = LIMITS.short) =>
+  (typeof v === 'string' ? v : typeof v === 'number' || typeof v === 'boolean' ? String(v) : '').slice(0, max);
+const validId = v => typeof v === 'string' && /^[a-z0-9]{4,16}$/.test(v);
+const obj = v => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+const pick = (src, keys, max) => Object.fromEntries(keys.map(k => [k, str(obj(src)[k], max)]));
+const list = (v, keys, longKeys = []) =>
+  (Array.isArray(v) ? v : []).slice(0, LIMITS.items).map(item => {
+    const it = obj(item); // junk entries (null, strings) become empty items instead of crashing
+    return {
+      id: validId(it.id) ? it.id : uid(),
+      ...pick(it, keys),
+      ...pick(it, longKeys, LIMITS.long),
+    };
+  });
+
+/** Return a clean copy of a CV or cover letter, or null if `raw` is not a document at all. */
+export function normalizeDoc(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if (!raw.personal && !raw.theme && !raw.title) return null;
+  const theme = obj(raw.theme);
+  const base = {
+    id: validId(raw.id) ? raw.id : uid(),
+    type: raw.type === 'cover' ? 'cover' : 'resume',
+    title: str(raw.title) || 'Untitled',
+    updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : Date.now(),
+    templateId: TEMPLATE_IDS.includes(raw.templateId) ? raw.templateId : DEFAULT_TEMPLATE,
+    theme: {
+      color: typeof theme.color === 'string' && /^#[0-9a-f]{6}$/i.test(theme.color) ? theme.color : THEME_COLORS[0],
+      font: FONTS.some(f => f.id === theme.font) ? theme.font : 'hind',
+    },
+    personal: pick(raw.personal, Object.keys(EMPTY_PERSONAL)),
+  };
+  if (base.type === 'cover') {
+    return {
+      ...base,
+      recipient: pick(raw.recipient, ['name', 'title', 'company', 'address']),
+      job: pick(raw.job, ['role', 'source']),
+      date: str(raw.date),
+      greeting: str(raw.greeting),
+      body: str(raw.body, LIMITS.body),
+      closing: str(raw.closing),
+    };
+  }
+  return {
+    ...base,
+    summary: str(raw.summary, LIMITS.long),
+    experience: list(raw.experience, ['role', 'company', 'location', 'start', 'end'], ['bullets']),
+    education: list(raw.education, ['degree', 'school', 'location', 'start', 'end'], ['details']),
+    skills: str(raw.skills, LIMITS.long),
+    projects: list(raw.projects, ['name', 'link'], ['description']),
+    certifications: str(raw.certifications, LIMITS.long),
+    languages: str(raw.languages, LIMITS.long),
+  };
+}

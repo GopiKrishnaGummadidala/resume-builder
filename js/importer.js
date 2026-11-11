@@ -1,31 +1,14 @@
 // Import an existing resume: PDF (via pdf.js, loaded on demand), plain text, or a Craftfolio JSON export.
 import { blankResume, uid } from './data.js';
+import { loadLib, libUrl } from './platform.js';
 
-const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-const addScript = src => new Promise((resolve, reject) => {
-  const s = document.createElement('script');
-  s.src = src;
-  s.onload = resolve;
-  s.onerror = () => reject(new Error('Could not load the PDF reader (are you offline?)'));
-  document.head.appendChild(s);
-});
-
-let pdfjsPromise;
-function loadPdfJs() {
-  // The worker script is loaded in-page (it defines window.pdfjsWorker) so pdf.js runs on the
-  // main thread; cross-origin Web Workers are blocked in sandboxed hosts.
-  if (!pdfjsPromise) {
-    pdfjsPromise = addScript(PDFJS_WORKER)
-      .then(() => addScript(PDFJS))
-      .then(() => {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-        return window.pdfjsLib;
-      });
-    pdfjsPromise.catch(() => { pdfjsPromise = null; });
-  }
-  return pdfjsPromise;
+// The worker script is loaded in-page (it defines window.pdfjsWorker) so pdf.js runs on the main
+// thread; cross-origin Web Workers are blocked in sandboxed hosts.
+async function loadPdfJs() {
+  await loadLib('pdfjsWorker');
+  const pdfjs = await loadLib('pdfjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = libUrl('pdfjsWorker');
+  return pdfjs;
 }
 
 export async function fileToText(file) {
