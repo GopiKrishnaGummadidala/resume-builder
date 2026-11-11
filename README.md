@@ -1,6 +1,8 @@
 # Craftfolio — CV & Cover Letter Builder
 
-A dependency-free, browser-only CV/resume and cover letter builder, inspired by the feature set of online resume builders such as novoresume.com.
+[![CI](https://github.com/GopiKrishnaGummadidala/resume-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/GopiKrishnaGummadidala/resume-builder/actions/workflows/ci.yml)
+
+A CV and cover letter builder that runs entirely in the browser. There is no backend: the server only serves static files, and documents stay in the visitor's own browser. Inspired by the feature set of online resume builders such as novoresume.com.
 
 ## Run with Docker Compose
 
@@ -8,7 +10,7 @@ A dependency-free, browser-only CV/resume and cover letter builder, inspired by 
 docker compose up -d --build
 ```
 
-Then open http://localhost:8090. The image is nginx serving the static files.
+Then open http://localhost:8090. The image is nginx (non-root, read-only filesystem) serving the static files.
 
 - Change the port: `CRAFTFOLIO_PORT=9000 docker compose up -d`
 - Rebuild after editing files: `docker compose up -d --build`
@@ -16,47 +18,90 @@ Then open http://localhost:8090. The image is nginx serving the static files.
 
 Documents are saved in each visitor's browser (localStorage), so the container keeps no data and needs no volume.
 
+## Run without Docker
+
+```bash
+npm run serve
+```
+
+Then open http://localhost:5180. Any static file server works (for example `python -m http.server 5180`). The app must be served over HTTP; browsers do not load ES modules from `file://`.
+
+## Features
+
+- **CV builder**: 7 templates (Banner, Classic, Minimal, Executive, Tech are single-column; Modern and Compact are two-column), 8 colours, 5 fonts, live A4 preview, reorderable sections.
+- **Cover letter builder**: the same templates, so a CV and its letter match. Edit the letter directly on the page (recipient, date, greeting, body, closing) or in the form. Bold and sub-headings; pasting from Word or Google Docs keeps bold. "Draft from a CV" writes a first draft.
+- **Live coach**: a score with concrete tips (action verbs, numbers, bullet counts, length, consistency).
+- **Strengthen bullets**: rewrites weak openers ("Responsible for…" → "Managed…").
+- **ATS checker**: upload a PDF/TXT, paste text or pick a saved CV.
+- **Job matcher**: matched, close and missing keywords against a job advert.
+- **Import**: PDF, TXT, or a JSON export. Free-text parsing is best-effort.
+- **Download PDF**: asks for a file name and downloads directly. About 160 KB for a full one-page letter, with selectable text.
+- **Storage**: everything stays in `localStorage`, merged safely across open tabs; "Export JSON" for backups.
+
 ## Your default details
 
 New CVs and cover letters start with the name, headline, email, phone, location and links from `js/profile.local.js`. Every field stays editable per document, and **↺ Reset to my details** in the Personal details section restores them.
 
-The file is git-ignored so your contact details stay out of the repo. To set it up on another machine, copy `js/profile.example.js` to `js/profile.local.js` and fill it in. Without it, new documents start empty. Docker builds include it, so rebuild after editing: `docker compose up -d --build`.
+The file is git-ignored so contact details stay out of the repository. To set it up, copy `js/profile.example.js` to `js/profile.local.js` and fill it in. Without it, new documents start empty. A Docker image built on a machine that has the file includes it, so rebuild after editing: `docker compose up -d --build`.
 
-## Run without Docker
-
-From this folder:
+## Development
 
 ```bash
-python -m http.server 5180
+npm ci
 ```
 
-Then open http://localhost:5180. (Must be served over HTTP — ES modules don't load from `file://`.)
+| Command | What it does |
+|---|---|
+| `npm run lint` | ESLint over the app, tests and scripts |
+| `npm test` | 83 unit tests (Node's built-in runner, no browser) |
+| `npm run test:e2e` | 22 browser tests (Playwright; run `npx playwright install chromium` once) |
+| `npm run serve` | Static dev server on port 5180 |
+| `npm run load` | HTTP load test against the running container |
+| `node scripts/bench.mjs` | Timings for rendering, coaching, storage |
+| `node scripts/measure-pdf.mjs` | PDF size and build time per encoder setting |
 
-## Features
-- **CV builder** — 6 templates (Classic, Minimal, Executive, Tech = single-column/ATS; Modern, Compact = two-column), 8 colours, 4 fonts, live A4 preview, reorderable sections.
-- **Cover letter builder** — same templates so CV + letter match; "Draft from a CV" writes a first draft from your headline, latest role and skills; copy personal details from a CV.
-- **Live coach** — score + tips (action verbs, quantified bullets, 3–6 bullets per role, summary length, pronouns, consistency; letter length, placeholders, recipient).
-- **✨ Strengthen bullets** — rewrites weak openers ("Responsible for…" → "Managed…").
-- **ATS Checker** — upload PDF/TXT, paste text or pick a saved CV; grouped checks + score; "rebuild in an ATS template".
-- **Job Matcher** — compares a CV with a job ad: matched / close / missing keywords; duplicate & tailor.
-- **Import** — PDF (pdf.js loaded on demand from cdnjs), TXT, or JSON export. Parsing is best-effort.
-- **Download PDF** — via the browser print dialog ("Save as PDF"), real selectable text.
-- **Storage** — everything stays in `localStorage`; export JSON for backups.
+CI (GitHub Actions) runs lint, unit tests, the browser tests, and a Docker build with smoke checks and the browser tests against the container.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | System context, module layers, security model, known weaknesses |
+| [docs/data-flow.md](docs/data-flow.md) | Start-up, editing, saving, cross-tab sync, import, PDF export |
+| [docs/concurrency.md](docs/concurrency.md) | Multiple tabs, merge rules, async work, what is and is not guaranteed |
+| [docs/design-rationale.md](docs/design-rationale.md) | Decisions, alternatives and measurements (including the PDF encoding) |
+| [docs/assumptions.md](docs/assumptions.md) | What the design takes for granted, and what breaks if it changes |
+| [docs/testing.md](docs/testing.md) | Test layers, what each proves, CI, coverage gaps |
+| [docs/load-test.md](docs/load-test.md) | Server throughput, in-browser timings, PDF export timings |
 
 ## Structure
+
 ```
-index.html
-css/styles.css      app UI, responsive + print rules
-css/templates.css   document template styles
-js/app.js           hash router, pages, editor, tools
-js/data.js          data model, persistence, samples, letter drafting
-js/templates.js     template registry + CV/letter renderers
-js/analysis.js      coach, ATS check, keyword matcher
-js/importer.js      PDF/text import and parsing
-artifact.html       same page for the hosted Claude artifact
-Dockerfile          nginx image; nginx.conf sets JS MIME type and no-cache
-docker-compose.yml  single "web" service on port 8090
+index.html            entry page (nginx, dev server)
+artifact.html         same markup for the hosted Claude artifact
+css/styles.css        app interface, light/dark, responsive
+css/templates.css     document templates (A4 page)
+js/app.js             router; home, templates and documents views
+js/editor.js          editor: form, live preview, in-page editing, coach
+js/tools.js           ATS checker and job matcher views
+js/preview.js         scales A4 pages to fit
+js/pdf-export.js      PDF: indexed PNG page image + invisible text layer
+js/importer.js        PDF/TXT import and résumé text parsing
+js/richtext.js        pasted HTML and in-page edits → letter markup
+js/platform.js        CDN libraries (pinned, integrity-checked), file saving
+js/ui.js              DOM helpers, toast, dialogs
+js/store.js           localStorage persistence with cross-tab merge
+js/analysis.js        coach, ATS check, keyword matcher
+js/templates.js       document → HTML string, escaping
+js/data.js            document model, validation, samples
+tests/unit/           Node unit tests
+tests/e2e/            Playwright browser tests
+scripts/              dev server, load test, benchmarks
+docs/                 architecture and design documents
+Dockerfile, nginx.conf, docker-compose.yml
+.github/workflows/ci.yml
 ```
 
-## Not included (vs. a commercial site)
-Accounts/cloud sync, payments, and LLM-powered writing. The AI-style features are rule-based and run offline; an LLM API could be plugged into `draftLetterBody` / `strengthenBullet` later.
+## Not included
+
+Accounts, cloud sync, payments, and language-model writing. The coaching features are rule-based and run locally; `draftLetterBody` and `strengthenBullet` are where a model could be plugged in.
