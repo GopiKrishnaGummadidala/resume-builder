@@ -31,7 +31,9 @@ export function setPath(obj, path, value) {
 }
 export function getPath(obj, path) { return keysOf(path).reduce((o, k) => (o == null ? o : o[k]), obj); }
 
+/** Show a short notice. Only one is shown at a time: a new notice replaces the current one. */
 export function toast(msg, ms = 2600) {
+  document.querySelectorAll('.toast').forEach(old => old.remove());
   const t = document.createElement('div');
   t.className = 'toast';
   t.setAttribute('role', 'status');
