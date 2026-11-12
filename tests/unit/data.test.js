@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizeDoc, blankResume, blankLetter, sampleResume, sampleLetter, draftLetterBody, resumeToText,
-  formatDate, splitLines, splitList, TEMPLATE_IDS, DEFAULT_TEMPLATE, THEME_COLORS, FONTS,
+  formatDate, splitLines, splitList, TEMPLATE_IDS, DEFAULT_TEMPLATE, THEME_COLORS, FONTS, LETTER_TITLE, letterTitle,
 } from '../../js/data.js';
 import { TEMPLATES } from '../../js/templates.js';
 
@@ -122,5 +122,18 @@ describe('text output', () => {
     const body = draftLetterBody(null, { ...blankLetter(), personal: { name: '', title: '' } });
     assert.match(body, /\[Job Title\]/);
     assert.match(body, /\[Company\]/);
+  });
+});
+
+describe('letterTitle', () => {
+  test('names a letter after the company, else the recipient, else nothing', () => {
+    const l = blankLetter();
+    assert.equal(l.title, LETTER_TITLE);
+    assert.equal(letterTitle(l), '');
+    l.recipient.name = ' Mr. Brandt ';
+    assert.equal(letterTitle(l), 'Cover Letter - Mr. Brandt');
+    l.recipient.company = 'Northwind Labs';
+    assert.equal(letterTitle(l), 'Cover Letter - Northwind Labs');
+    assert.equal(letterTitle({}), '');
   });
 });

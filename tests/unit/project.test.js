@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { cleanFileName, setPath, getPath } from '../../js/ui.js';
 import { latin1, pdfName, PDF_DEFAULTS } from '../../js/pdf-export.js';
 import { parseResumeText } from '../../js/importer.js';
-import { sampleResume, sampleLetter } from '../../js/data.js';
+import { sampleResume, sampleLetter, blankLetter } from '../../js/data.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = f => fs.readFileSync(path.join(root, f), 'utf8').replace(/\r\n/g, '\n');
@@ -112,7 +112,11 @@ describe('helpers', () => {
   });
 
   test('pdfName suggests a readable file name', () => {
-    assert.equal(pdfName(sampleLetter()), 'Jordan Rivera Cover Letter');
+    assert.equal(pdfName(sampleLetter()), 'Sample Cover letter for Acme'); // a letter uses its own name
+    const unnamed = blankLetter();
+    unnamed.personal.name = 'Jordan Rivera';
+    assert.equal(pdfName(unnamed), 'Jordan Rivera Cover Letter'); // no recipient yet
+    assert.equal(pdfName({ ...unnamed, title: 'Cover Letter - Northwind Labs' }), 'Cover Letter - Northwind Labs');
     assert.equal(pdfName(sampleResume()), 'Jordan Rivera CV');
     assert.equal(pdfName({ type: 'cover', title: 'My: letter?', personal: { name: '' } }), 'My letter');
     assert.equal(pdfName({ type: 'cover', title: '???', personal: {} }), 'document');

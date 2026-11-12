@@ -164,7 +164,6 @@ document.addEventListener('click', e => {
   else if (act === 'letter-from') {
     const r = store.get(b.dataset.id);
     const l = blankLetter(r.templateId, r);
-    l.title = `Cover letter — ${r.personal.name || r.title}`;
     store.add(l);
     go(`#edit-${l.id}`);
   }

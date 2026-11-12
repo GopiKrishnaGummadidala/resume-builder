@@ -1,6 +1,6 @@
 // The document editor: form on the left, live A4 preview in the middle, coach on the right.
 // The form and the preview both edit the same in-memory document; every change is saved through the store.
-import { draftLetterBody, THEME_COLORS, FONTS, uid, splitLines, DEFAULT_PERSONAL } from './data.js';
+import { draftLetterBody, THEME_COLORS, FONTS, uid, splitLines, DEFAULT_PERSONAL, LETTER_TITLE, letterTitle } from './data.js';
 import { store } from './store.js';
 import { TEMPLATES, renderDoc, esc, letterBlocks, PAGE } from './templates.js';
 import { coachResume, coachLetter, strengthenBullet } from './analysis.js';
@@ -196,7 +196,9 @@ export function mountEditor() {
     const path = e.target.dataset.path;
     if (!path) return;
     if (path === 'recipient.name' && doc.type === 'cover') syncGreeting(e.target.value);
+    const autoTitle = titleIsAuto();
     setPath(doc, path, e.target.value);
+    if (autoTitle && path.startsWith('recipient.')) syncTitle();
     refresh();
     save();
   });
@@ -240,12 +242,24 @@ export function mountEditor() {
     const path = fieldEl.dataset.editField;
     const value = fieldEl.textContent.replace(/\s+/g, ' ').trim();
     if (path === 'recipient.name') syncGreeting(value);
+    const autoTitle = titleIsAuto();
     setPath(doc, path, value);
+    if (autoTitle && path.startsWith('recipient.')) syncTitle();
     const input = $(`.ed-form [data-path="${path}"]`, root);
     if (input) input.value = value;
     updateAround();
     save();
   });
+  // The letter is named "Cover Letter - <company or recipient>" until the name is typed by hand.
+  function titleIsAuto() {
+    const t = (doc.title || '').trim();
+    return doc.type === 'cover' && (!t || t === LETTER_TITLE || t === letterTitle(doc));
+  }
+  function syncTitle() {
+    doc.title = letterTitle(doc) || LETTER_TITLE;
+    const input = $('.title-input', root);
+    if (input) input.value = doc.title;
+  }
   // Keep "Dear …," in step with the recipient name unless the greeting was customised.
   function syncGreeting(newName) {
     const auto = !doc.greeting?.trim() || doc.greeting.trim() === greetingFor(doc.recipient.name.trim()) || doc.greeting.trim() === greetingFor('');
@@ -353,6 +367,7 @@ export function mountEditor() {
       saveFile(`${(doc.title || 'document').replace(/[^\w-]+/g, '_')}.json`, JSON.stringify(doc, null, 2));
     }
   });
+  if (titleIsAuto() && letterTitle(doc) && doc.title !== letterTitle(doc)) { syncTitle(); save(); }
   refresh();
 }
 

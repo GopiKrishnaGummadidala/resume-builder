@@ -183,7 +183,7 @@ test.describe('PDF download', () => {
 
     await page.locator('[data-act="download"]').click();
     const input = page.locator('#fn-input');
-    await expect(input).toHaveValue('Jordan Rivera Cover Letter');
+    await expect(input).toHaveValue('Cover Letter - Mr Brandt'); // named after the recipient
     await input.fill('Cover Letter: Northwind?.pdf'); // illegal characters and a typed extension
     const downloadPromise = page.waitForEvent('download');
     await page.keyboard.press('Enter');
@@ -330,5 +330,71 @@ test.describe('tools', () => {
     await page.locator('[data-act="m-run"]').click();
     await expect(page.locator('#m-result .kw.ok', { hasText: 'figma' })).toBeVisible();
     await expect(page.locator('#m-result .kw.bad', { hasText: 'sql' })).toBeVisible();
+  });
+});
+
+test.describe('cover letter name', () => {
+  test('fills in from the To details until it is typed by hand', async ({ page }) => {
+    await newLetter(page);
+    const title = page.locator('.title-input');
+    await expect(title).toHaveValue('Untitled cover letter');
+    await field(page, 'recipient.name').fill('Mr. Brandt');
+    await expect(title).toHaveValue('Cover Letter - Mr. Brandt');
+    await field(page, 'recipient.company').fill('Northwind Labs');
+    await expect(title).toHaveValue('Cover Letter - Northwind Labs');
+
+    await page.locator('[data-act="download"]').click();
+    await expect(page.locator('#fn-input')).toHaveValue('Cover Letter - Northwind Labs');
+    await page.keyboard.press('Escape');
+
+    await page.goto('/#documents'); // saved, and shown in the list
+    await expect(page.locator('.doc-card h3').first()).toHaveText('Cover Letter - Northwind Labs');
+  });
+
+  test('a name typed by hand is kept; clearing the recipient resets an automatic one', async ({ page }) => {
+    await newLetter(page);
+    const title = page.locator('.title-input');
+    await field(page, 'recipient.company').fill('Northwind Labs');
+    await field(page, 'recipient.company').fill('');
+    await expect(title).toHaveValue('Untitled cover letter');
+    await title.fill('Application 2026');
+    await field(page, 'recipient.company').fill('Northwind Labs');
+    await expect(title).toHaveValue('Application 2026');
+  });
+
+  test('editing the recipient on the page also names the letter', async ({ page }) => {
+    await newLetter(page);
+    const name = live(page).locator('[data-edit-field="recipient.name"]');
+    await name.click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('Ms. Okafor');
+    await expect(page.locator('.title-input')).toHaveValue('Cover Letter - Ms. Okafor');
+  });
+});
+
+test.describe('contact links', () => {
+  test('LinkedIn and GitHub open in a new tab from the page, and are clickable in the PDF', async ({ page, context }) => {
+    await newLetter(page);
+    await field(page, 'personal.linkedin').fill('linkedin.com/in/jordan-rivera');
+    await field(page, 'personal.github').fill('github.com/jordanr');
+    const linkedin = live(page).locator('a[href="https://linkedin.com/in/jordan-rivera"]');
+    const github = live(page).locator('a[href="https://github.com/jordanr"]');
+    await expect(linkedin).toHaveAttribute('target', '_blank');
+    await expect(github).toHaveAttribute('rel', 'noopener noreferrer');
+
+    await context.route('https://github.com/**', route => route.fulfill({ contentType: 'text/html', body: '<title>stub</title>' }));
+    const [popup] = await Promise.all([context.waitForEvent('page'), github.click()]);
+    expect(popup.url()).toBe('https://github.com/jordanr');
+    await popup.close();
+
+    const raw = await page.evaluate(async () => {
+      const { store } = await import('/js/store.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      const doc = store.get(location.hash.replace('#edit-', ''));
+      const { blob } = await buildPdf(doc, document.querySelector('#print-area'));
+      return new TextDecoder('latin1').decode(await blob.arrayBuffer());
+    });
+    expect(raw).toContain('/URI (https://linkedin.com/in/jordan-rivera)');
+    expect(raw).toContain('/URI (https://github.com/jordanr)');
   });
 });

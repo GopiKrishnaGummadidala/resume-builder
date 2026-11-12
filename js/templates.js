@@ -28,8 +28,37 @@ export const esc = s =>
 const fontCss = id => (FONTS.find(f => f.id === id) || FONTS[0]).css;
 const dates = (a, b) => [a, b].filter(Boolean).map(esc).join(' – ');
 
+/**
+ * Address a contact value opens, or '' when it is not one. Only mailto: and http(s) links are
+ * produced, so a value such as "javascript:..." is never turned into a link.
+ * @param {'email'|'website'|'linkedin'|'github'|string} kind
+ */
+export function contactUrl(kind, value) {
+  const v = String(value ?? '').trim();
+  if (!v || /\s/.test(v)) return '';
+  if (kind === 'email') return /^[^@:/]+@[^@:/]+\.[^@:/]+$/.test(v) ? `mailto:${v}` : '';
+  if (!['website', 'linkedin', 'github'].includes(kind)) return '';
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[\w-]+(\.[\w-]+)+([/:?#].*)?$/.test(v)) return `https://${v}`; // "github.com/name"
+  if (/^[\w-]+$/.test(v)) { // a bare handle
+    if (kind === 'linkedin') return `https://www.linkedin.com/in/${v}`;
+    if (kind === 'github') return `https://github.com/${v}`;
+  }
+  return '';
+}
+
+/** `shown` as a link that opens in a new tab, or as plain text when the value is not a link. */
+function contactLink(kind, value, shown, cls = '') {
+  const url = contactUrl(kind, value);
+  const c = cls ? ` class="${cls}"` : '';
+  return url
+    ? `<a${c} href="${esc(url)}" target="_blank" rel="noopener noreferrer">${shown}</a>`
+    : `<span${c}>${shown}</span>`;
+}
+
+const CONTACT_KINDS = ['email', 'phone', 'location', 'website', 'linkedin', 'github'];
 function contactItems(p) {
-  return [p.email, p.phone, p.location, p.website, p.linkedin, p.github].filter(Boolean).map(esc);
+  return CONTACT_KINDS.filter(k => p[k]).map(k => (contactUrl(k, p[k]) ? contactLink(k, p[k], esc(p[k])) : esc(p[k])));
 }
 
 // Small inline icons (stroke = currentColor) for the Banner contact row.
@@ -42,19 +71,12 @@ const ICONS = {
   github: '<svg viewBox="0 0 24 24" class="fill"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7c-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg>',
 };
 
-/** Contact items with icons; LinkedIn/GitHub shown as handles like on a printed letterhead. */
+/** Contact items with icons; LinkedIn/GitHub shown as handles like on a printed letterhead, linked to the profile. */
 function iconContacts(p) {
   const handle = v => v.replace(/^https?:\/\//, '').replace(/^(www\.)?(linkedin\.com\/in|github\.com)\//i, '').replace(/\/$/, '');
-  return [
-    ['email', p.email, 'b-upper'],
-    ['phone', p.phone],
-    ['location', p.location],
-    ['website', p.website],
-    ['linkedin', p.linkedin && handle(p.linkedin)],
-    ['github', p.github && handle(p.github)],
-  ]
-    .filter(([, v]) => v)
-    .map(([k, v, cls]) => `<span class="b-ci ${cls || ''}">${ICONS[k]}<span>${esc(v)}</span></span>`)
+  const shown = { linkedin: handle, github: handle };
+  return CONTACT_KINDS.filter(k => p[k])
+    .map(k => contactLink(k, p[k], `${ICONS[k]}<span>${esc((shown[k] || String)(p[k]))}</span>`, `b-ci${k === 'email' ? ' b-upper' : ''}`))
     .join('');
 }
 

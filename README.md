@@ -35,7 +35,8 @@ Then open http://localhost:5180. Any static file server works (for example `pyth
 - **ATS checker**: upload a PDF/TXT, paste text or pick a saved CV.
 - **Job matcher**: matched, close and missing keywords against a job advert.
 - **Import**: PDF, TXT, or a JSON export. Free-text parsing is best-effort.
-- **Download PDF**: asks for a file name and downloads directly. About 160 KB for a full one-page letter, with selectable text.
+- **Download PDF**: asks for a file name and downloads directly. About 160 KB for a full one-page letter, with selectable text and clickable email, website, LinkedIn and GitHub links.
+- **Letter names**: a cover letter is named "Cover Letter - <company>" from its "To" details, until you type a name yourself. The download uses the same name.
 - **Storage**: everything stays in `localStorage`, merged safely across open tabs; "Export JSON" for backups.
 
 ## Your default details
@@ -53,8 +54,8 @@ npm ci
 | Command | What it does |
 |---|---|
 | `npm run lint` | ESLint over the app, tests and scripts |
-| `npm test` | 83 unit tests (Node's built-in runner, no browser) |
-| `npm run test:e2e` | 22 browser tests (Playwright; run `npx playwright install chromium` once) |
+| `npm test` | 88 unit tests (Node's built-in runner, no browser) |
+| `npm run test:e2e` | 26 browser tests (Playwright; run `npx playwright install chromium` once) |
 | `npm run serve` | Static dev server on port 5180 |
 | `npm run load` | HTTP load test against the running container |
 | `node scripts/bench.mjs` | Timings for rendering, coaching, storage |

@@ -7,7 +7,9 @@
 //      smaller than a JPEG for a page of text and keeps letters sharp. See docs/design-rationale.md.
 //   4. Lay invisible, word-positioned text over the image so the PDF is selectable, searchable and
 //      readable by applicant tracking systems.
+//   5. Add a clickable area over every link (email, website, LinkedIn, GitHub).
 import { renderDoc, PAGE } from './templates.js';
+import { LETTER_TITLE } from './data.js';
 import { loadLib } from './platform.js';
 
 /** Encoding settings. `colors` is the palette size per page; `scale` is bitmap pixels per CSS pixel. */
@@ -57,6 +59,21 @@ function addTextLayer(pdf, page, pageCssH, ptPerPx) {
   }
 }
 
+/** Clickable areas over the page image for every link (email, website, LinkedIn, GitHub). */
+function addLinks(pdf, page, pageCssH, ptPerPx) {
+  const origin = page.getBoundingClientRect();
+  page.querySelectorAll('a[href]').forEach(a => {
+    if (!/^(https?|mailto):/i.test(a.href)) return;
+    for (const r of a.getClientRects()) {
+      if (!r.width || !r.height) continue;
+      const top = r.top - origin.top;
+      const pageNo = Math.floor(top / pageCssH);
+      pdf.setPage(pageNo + 1);
+      pdf.link((r.left - origin.left) * ptPerPx, (top - pageNo * pageCssH) * ptPerPx, r.width * ptPerPx, r.height * ptPerPx, { url: a.href });
+    }
+  });
+}
+
 /** Encode one page bitmap. Returns { data, format } for jsPDF.addImage. */
 async function encodePage(canvas, opts) {
   if (opts.encoder === 'indexed') {
@@ -102,6 +119,7 @@ export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
       pdf.addImage(img.data, img.format, 0, 0, pw, part.height * (pw / canvas.width), undefined, 'FAST');
     }
     addTextLayer(pdf, page, PAGE.W * (ph / pw), pw / PAGE.W);
+    addLinks(pdf, page, PAGE.W * (ph / pw), pw / PAGE.W);
     return { blob: pdf.output('blob'), pages };
   } finally {
     area.classList.remove('rendering');
@@ -110,6 +128,10 @@ export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
 }
 
 /** Suggested file name (without extension) for a document. */
-export const pdfName = doc =>
-  (doc.personal?.name ? `${doc.personal.name} ${doc.type === 'cover' ? 'Cover Letter' : 'CV'}` : doc.title)
-    .replace(/[^\w\s-]+/g, '').trim() || 'document';
+export function pdfName(doc) {
+  const cover = doc.type === 'cover';
+  const named = doc.title && doc.title !== LETTER_TITLE; // a letter is named after its recipient, or by the user
+  const base = cover && named ? doc.title
+    : doc.personal?.name ? `${doc.personal.name} ${cover ? 'Cover Letter' : 'CV'}` : doc.title;
+  return String(base || '').replace(/[^\w\s-]+/g, '').replace(/\s+/g, ' ').trim() || 'document';
+}

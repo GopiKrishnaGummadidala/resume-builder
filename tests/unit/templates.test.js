@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderResume, renderLetter, renderDoc, letterBlocks, esc, TEMPLATES, PAGE } from '../../js/templates.js';
+import { renderResume, renderLetter, renderDoc, letterBlocks, contactUrl, esc, TEMPLATES, PAGE } from '../../js/templates.js';
 import { sampleResume, sampleLetter, blankLetter, blankResume } from '../../js/data.js';
 
 const XSS = '<img src=x onerror=alert(1)>"\'&';
@@ -124,5 +124,53 @@ describe('renderResume', () => {
   test('renderDoc picks the renderer by document type', () => {
     assert.ok(renderDoc(sampleLetter()).includes('Sincerely,'));
     assert.ok(renderDoc(sampleResume()).includes('Experience'));
+  });
+});
+
+describe('contact links', () => {
+  test('contactUrl builds profile, site and mail addresses', () => {
+    assert.equal(contactUrl('linkedin', 'linkedin.com/in/jordan-rivera'), 'https://linkedin.com/in/jordan-rivera');
+    assert.equal(contactUrl('linkedin', 'https://www.linkedin.com/in/jordan-rivera/'), 'https://www.linkedin.com/in/jordan-rivera/');
+    assert.equal(contactUrl('linkedin', 'jordan-rivera'), 'https://www.linkedin.com/in/jordan-rivera');
+    assert.equal(contactUrl('github', 'jordanr'), 'https://github.com/jordanr');
+    assert.equal(contactUrl('github', 'github.com/jordanr'), 'https://github.com/jordanr');
+    assert.equal(contactUrl('website', 'jordan.example'), 'https://jordan.example');
+    assert.equal(contactUrl('email', 'jordan@example.com'), 'mailto:jordan@example.com');
+  });
+
+  test('contactUrl refuses anything that is not a web or mail address', () => {
+    for (const bad of ['javascript:alert(1)', 'data:text/html,x', 'vbscript:x', 'my profile', '', null, XSS]) {
+      for (const kind of ['linkedin', 'github', 'website', 'email']) assert.equal(contactUrl(kind, bad), '', `${kind}: ${bad}`);
+    }
+    assert.equal(contactUrl('phone', '+49 40 1234'), '');
+    assert.equal(contactUrl('location', 'hamburg.de'), '');
+    assert.equal(contactUrl('website', 'bare-word'), '');
+    assert.equal(contactUrl('email', 'javascript:x@y.z'), '');
+  });
+
+  test('LinkedIn and GitHub are links that open in a new tab, in every template', () => {
+    for (const t of TEMPLATES) {
+      for (const doc of [sampleResume(t.id), { ...sampleLetter(), templateId: t.id }]) {
+        doc.personal.linkedin = 'linkedin.com/in/jordan-rivera';
+        doc.personal.github = 'github.com/jordanr';
+        const html = renderDoc(doc);
+        for (const url of ['https://linkedin.com/in/jordan-rivera', 'https://github.com/jordanr']) {
+          const tag = html.match(new RegExp(`<a[^>]*href="${url}"[^>]*>`));
+          assert.ok(tag, `${t.id} ${doc.type}: ${url} is not a link`);
+          assert.match(tag[0], /target="_blank"/);
+          assert.match(tag[0], /rel="noopener noreferrer"/);
+        }
+      }
+    }
+  });
+
+  test('a script address in a contact field never becomes a link', () => {
+    for (const t of TEMPLATES) {
+      const r = sampleResume(t.id);
+      r.personal.linkedin = r.personal.github = r.personal.website = r.personal.email = 'javascript:alert(1)';
+      const html = renderResume(r);
+      assert.equal(/href="\s*javascript:/i.test(html), false, t.id);
+      assert.ok(html.includes('javascript:alert(1)'), 'still shown as text');
+    }
   });
 });

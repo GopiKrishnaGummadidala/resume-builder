@@ -117,7 +117,7 @@ sequenceDiagram
     participant L as platform.js
     participant C as cdnjs
     U->>E: Download PDF
-    E->>U: file-name dialog (suggested: "<name> Cover Letter")
+    E->>U: file-name dialog (suggested: the letter name, "Cover Letter - <company>")
     U-->>E: name (cleaned of illegal characters, ".pdf" added once)
     E->>P: buildPdf(doc, #print-area, {title})
     P->>L: loadLib(html2canvas, jspdf, pako, upng)

@@ -102,12 +102,20 @@ export function sampleResume(templateId = DEFAULT_TEMPLATE) {
   };
 }
 
+/** Name a new cover letter has until a recipient is entered. */
+export const LETTER_TITLE = 'Untitled cover letter';
+/** "Cover Letter - <company, or recipient name>"; '' while the "To" details are empty. */
+export function letterTitle(letter) {
+  const to = (letter.recipient?.company || letter.recipient?.name || '').trim();
+  return to ? `Cover Letter - ${to}` : '';
+}
+
 export function blankLetter(templateId = DEFAULT_TEMPLATE, fromResume = null) {
   const personal = fromResume ? { ...blankPersonal(), ...fromResume.personal } : blankPersonal();
   return {
     id: uid(),
     type: 'cover',
-    title: 'Untitled cover letter',
+    title: LETTER_TITLE,
     updatedAt: Date.now(),
     templateId: fromResume ? fromResume.templateId : templateId,
     theme: fromResume ? { ...fromResume.theme } : DEFAULT_THEME(),
