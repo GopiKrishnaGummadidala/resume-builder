@@ -130,53 +130,135 @@ const SECTION_ICONS = {
   Interests: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
 };
 
-function section(title, inner) {
-  if (!inner) return '';
+/**
+ * Editing helpers for the live preview. With `on`, text is wrapped in in-page editors and the page gets
+ * add / move / remove / edit controls. Without it every helper returns plain output (or nothing), so
+ * thumbnails and the PDF never contain an editor or a control.
+ * Controls carry no text of their own (CSS draws their labels), so both renders hold the same words.
+ */
+function editing(on) {
+  if (!on) {
+    return {
+      on,
+      f: (path, value) => esc(value),
+      para: (path, value) => inline(value),
+      bullets: (path, text) => {
+        const lines = splitLines(text);
+        return lines.length ? `<ul>${lines.map(b => `<li>${inline(b)}</li>`).join('')}</ul>` : '';
+      },
+      ctl: () => '', add: () => '', pencil: () => '', empty: () => '',
+    };
+  }
+  const box = label => `spellcheck="true" role="textbox" aria-label="${esc(label)}"`;
+  const button = (cls, attrs, label) =>
+    `<button type="button" class="${cls}" ${attrs} data-label="${esc(label)}" aria-label="${esc(label)}" title="${esc(label)}"></button>`;
+  const move = (list, i, dir, off, cls, label) =>
+    button(`ed-btn ${cls}`, `data-act="move" data-list="${list}" data-i="${i}" data-dir="${dir}"${off ? ' disabled' : ''}`, label);
+  return {
+    on,
+    /** Single-line text, edited in place. */
+    f: (path, value, label) =>
+      `<span class="l-field" contenteditable="plaintext-only" ${box(label)} data-edit-field="${esc(path)}" data-placeholder="${esc(label)}">${esc(value)}</span>`,
+    /** One paragraph that may contain bold text. */
+    para: (path, value, label) =>
+      `<span class="l-lines" contenteditable="true" ${box(label)} data-edit-lines="${esc(path)}" data-placeholder="${esc(label)}">${inline(value)}</span>`,
+    /** A bullet list, one line of the stored text per bullet. Always drawn, so there is somewhere to type. */
+    bullets: (path, text) => {
+      const label = 'Achievements, one per line';
+      return `<ul class="l-lines" contenteditable="true" aria-multiline="true" ${box(label)} data-edit-lines="${esc(path)}" data-placeholder="${label}">${
+        splitLines(text).map(b => `<li>${inline(b)}</li>`).join('') || '<li></li>'}</ul>`; // an empty bullet to type in
+    },
+    /** Move up / move down / remove, for item `i` of a list of `len`. */
+    ctl: (list, i, len) => `<span class="ed-ctl" contenteditable="false">${
+      move(list, i, -1, i === 0, 'ed-up', 'Move up')}${
+      move(list, i, 1, i === len - 1, 'ed-down', 'Move down')}${
+      button('ed-btn ed-remove', `data-act="remove-item" data-list="${list}" data-i="${i}"`, 'Remove')}</span>`,
+    /** "+ Add ..." at the end of a list section. */
+    add: (list, label) => button('ed-add', `data-act="add-item" data-list="${list}"`, label),
+    /** Opens the details panel at a field, for content that is not typed on the page (contact, photo, skills). */
+    pencil: (group, path, label) => button('ed-btn ed-pencil', `data-edit-open="${group}" data-edit-focus="${path}"`, label),
+    empty: (group, path, label) => button('ed-add', `data-edit-open="${group}" data-edit-focus="${path}"`, label),
+  };
+}
+const PLAIN = editing(false);
+
+/**
+ * @param {string} title
+ * @param {string} inner the section's content; an empty section is not drawn
+ * @param {{pencil?: string, after?: string}} [tools] editing controls (live preview only)
+ */
+function section(title, inner, { pencil = '', after = '' } = {}) {
+  if (!inner && !after) return '';
   const icon = SECTION_ICONS[title] ? `<span class="r-ico" aria-hidden="true"><svg viewBox="0 0 24 24">${SECTION_ICONS[title]}</svg></span>` : '';
-  return `<section class="r-sec" data-sec="${title.toLowerCase()}"><h3 class="r-h">${icon}<span>${esc(title)}</span></h3>${inner}</section>`;
+  return `<section class="r-sec" data-sec="${title.toLowerCase()}"><h3 class="r-h">${icon}<span>${esc(title)}</span>${pencil}</h3>${inner}${after}</section>`;
+}
+/** A section whose content is edited in the details panel: a pencil in the heading, "+ Add" when empty. */
+function panelSection(E, title, inner, group, path) {
+  if (!E.on) return section(title, inner);
+  const what = title.toLowerCase();
+  return section(title, inner, { pencil: E.pencil(group, path, `Edit ${what}`), after: inner ? '' : E.empty(group, path, `Add ${what}`) });
 }
 
 /** Round profile photo, or '' when the document has none. Only embedded images are ever drawn. */
 const photoHtml = p => (validPhoto(p.photo) ? `<img class="r-photo" src="${esc(p.photo)}" alt="">` : '');
 
-function experienceHtml(r) {
-  if (!r.experience.length) return '';
+/** "2019 – Present"; two fields while editing. */
+const period = (E, at, e) => (E.on ? `${E.f(`${at}.start`, e.start, 'Start')} – ${E.f(`${at}.end`, e.end, 'End')}` : dates(e.start, e.end));
+
+function experienceHtml(r, E) {
+  const n = r.experience.length;
   return r.experience
-    .map(e => {
-      const bullets = splitLines(e.bullets);
-      return `<div class="r-item">
-        <div class="r-row"><strong>${esc(e.role) || 'Role'}</strong><span class="r-date">${dates(e.start, e.end)}</span></div>
-        <div class="r-row r-sub"><span>${esc(e.company)}</span><span>${esc(e.location)}</span></div>
-        ${e.about ? `<p class="r-about">${esc(e.about)}</p>` : ''}
-        ${bullets.length ? `<ul>${bullets.map(b => `<li>${inline(b)}</li>`).join('')}</ul>` : ''}
+    .map((e, i) => {
+      const at = `experience.${i}`;
+      return `<div class="r-item">${E.ctl('experience', i, n)}
+        <div class="r-row"><strong>${E.on ? E.f(`${at}.role`, e.role, 'Job title') : esc(e.role) || 'Role'}</strong><span class="r-date">${period(E, at, e)}</span></div>
+        <div class="r-row r-sub"><span>${E.f(`${at}.company`, e.company, 'Company')}</span><span>${E.f(`${at}.location`, e.location, 'Location')}</span></div>
+        ${e.about || E.on ? `<p class="r-about">${E.f(`${at}.about`, e.about, 'About the company (optional)')}</p>` : ''}
+        ${E.bullets(`${at}.bullets`, e.bullets)}
       </div>`;
     })
-    .join('');
+    .join('') + E.add('experience', 'Add position');
 }
 
-function educationHtml(r) {
-  if (!r.education.length) return '';
+function educationHtml(r, E) {
+  const n = r.education.length;
   return r.education
-    .map(
-      e => `<div class="r-item">
-        <div class="r-row"><strong>${esc(e.degree) || 'Degree'}</strong><span class="r-date">${dates(e.start, e.end)}</span></div>
-        <div class="r-row r-sub"><span>${esc(e.school)}</span><span>${esc(e.location)}</span></div>
-        ${e.details ? `<p class="r-p">${esc(e.details)}</p>` : ''}
-      </div>`
-    )
-    .join('');
+    .map((e, i) => {
+      const at = `education.${i}`;
+      return `<div class="r-item">${E.ctl('education', i, n)}
+        <div class="r-row"><strong>${E.on ? E.f(`${at}.degree`, e.degree, 'Degree') : esc(e.degree) || 'Degree'}</strong><span class="r-date">${period(E, at, e)}</span></div>
+        <div class="r-row r-sub"><span>${E.f(`${at}.school`, e.school, 'School')}</span><span>${E.f(`${at}.location`, e.location, 'Location')}</span></div>
+        ${e.details || E.on ? `<p class="r-p">${E.f(`${at}.details`, e.details, 'Details (optional)')}</p>` : ''}
+      </div>`;
+    })
+    .join('') + E.add('education', 'Add education');
 }
 
-function projectsHtml(r) {
-  if (!r.projects.length) return '';
+function projectsHtml(r, E) {
+  const n = r.projects.length;
   return r.projects
-    .map(
-      p => `<div class="r-item"><div class="r-row"><strong>${esc(p.name)}</strong><span class="r-date">${esc(p.link)}</span></div>
-      ${p.description ? `<p class="r-p">${esc(p.description)}</p>` : ''}</div>`
-    )
-    .join('');
+    .map((p, i) => {
+      const at = `projects.${i}`;
+      return `<div class="r-item">${E.ctl('projects', i, n)}<div class="r-row"><strong>${E.f(`${at}.name`, p.name, 'Project name')}</strong><span class="r-date">${E.f(`${at}.link`, p.link, 'Link')}</span></div>
+      ${p.description || E.on ? `<p class="r-p">${E.f(`${at}.description`, p.description, 'What it is and what came of it')}</p>` : ''}</div>`;
+    })
+    .join('') + E.add('projects', 'Add project');
 }
 
+function achievementsHtml(r, E) {
+  const all = r.achievements || [];
+  return all
+    .map((a, i) => {
+      if (!E.on && !a.title && !a.description) return ''; // an untouched entry is not printed
+      const at = `achievements.${i}`;
+      return `<div class="r-item">${E.ctl('achievements', i, all.length)}<div class="r-row"><strong>${E.f(`${at}.title`, a.title, 'Achievement')}</strong><span class="r-date">${E.f(`${at}.date`, a.date, 'Date')}</span></div>
+      ${a.description || E.on ? `<p class="r-p">${E.para(`${at}.description`, a.description, 'What you did and the result')}</p>` : ''}</div>`;
+    })
+    .join('') + E.add('achievements', 'Add achievement');
+}
+
+const SUMMARY_HINT = 'Summary: who you are, your strongest results, what you want next';
+const summaryHtml = (r, E) => (r.summary || E.on ? `<p class="r-p">${E.f('summary', r.summary, SUMMARY_HINT)}</p>` : '');
 const skillsInline = r => (splitList(r.skills).length ? `<p class="r-p">${splitList(r.skills).map(esc).join(' · ')}</p>` : '');
 const skillsChips = r => (splitList(r.skills).length ? `<div class="r-chips">${splitList(r.skills).map(s => `<span>${esc(s)}</span>`).join('')}</div>` : '');
 const skillsList = r => (splitList(r.skills).length ? `<ul class="r-plain">${splitList(r.skills).map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '');
@@ -200,33 +282,29 @@ function entriesList(text, { levels = false } = {}) {
     e.date ? `<span class="r-e-d">${esc(e.date)}</span>` : ''}${levels ? levelDots(languageLevel(e.detail)) : ''}</li>`).join('')}</ul>`;
 }
 
-function achievementsHtml(r) {
-  const items = (r.achievements || []).filter(a => a.title || a.description);
-  return items
-    .map(a => `<div class="r-item"><div class="r-row"><strong>${esc(a.title)}</strong><span class="r-date">${esc(a.date)}</span></div>
-      ${a.description ? `<p class="r-p">${inline(a.description)}</p>` : ''}</div>`)
-    .join('');
-}
-
 /**
  * @param {object} p personal details
  * @param {'plain'|'split'|'sidebar'|'banner'} variant
- * @param {string} [summary] shown inside the banner header (Profile template)
+ * @param {object} E editing helpers
+ * @param {string} [summary] shown inside the banner header (Profile and Signature templates)
  */
-function header(p, variant, summary = '') {
-  const name = esc(p.name) || 'Your Name';
-  const title = p.title ? `<div class="r-title">${esc(p.title)}</div>` : '';
+function header(p, variant, E, summary) {
+  const name = E.on ? E.f('personal.name', p.name, 'Your Name') : esc(p.name) || 'Your Name';
+  const title = p.title || E.on ? `<div class="r-title">${E.f('personal.title', p.title, 'Headline / job title')}</div>` : '';
   const photo = photoHtml(p);
   const contacts = contactItems(p);
-  if (variant === 'sidebar') return `${photo}<div class="r-name">${name}</div>${title}`;
+  // Contact details and the photo are edited in the details panel.
+  const pencil = E.pencil('personal', 'personal.email', 'Edit contact details and photo');
+  if (variant === 'sidebar') return `${photo}<div class="r-name">${name}</div>${title}${pencil}`;
   if (variant === 'banner') {
     const ci = iconContacts(p);
+    const about = summary !== undefined && (summary || E.on) ? `<p class="b-summary">${E.f('summary', summary, SUMMARY_HINT)}</p>` : '';
     return `<header class="b-head${photo ? ' has-photo' : ''}">
-      <div class="b-top">${photo}<div class="b-id"><div class="r-name">${name}</div>${title}${summary ? `<p class="b-summary">${esc(summary)}</p>` : ''}</div></div>
-      ${ci ? `<div class="b-contact">${ci}</div>` : ''}
+      <div class="b-top">${photo}<div class="b-id"><div class="r-name">${name}</div>${title}${about}</div></div>
+      ${ci || E.on ? `<div class="b-contact">${ci}${pencil}</div>` : ''}
     </header>`;
   }
-  const contactRow = contacts.length ? `<div class="r-contact">${contacts.map(c => `<span>${c}</span>`).join('')}</div>` : '';
+  const contactRow = contacts.length || E.on ? `<div class="r-contact">${contacts.map(c => `<span>${c}</span>`).join('')}${pencil}</div>` : '';
   if (variant === 'split') {
     return `<header class="r-header r-split">${photo}<div class="r-id"><div class="r-name">${name}</div>${title}</div>${contactRow}</header>`;
   }
@@ -240,55 +318,62 @@ function pageWrap(doc, inner) {
   return `<div class="page tpl-${esc(doc.templateId)}" style="${style}">${inner}</div>`;
 }
 
-export function renderResume(r) {
+/**
+ * @param {object} r CV
+ * @param {{editable?: boolean}} [opts] editable: text is edited in place and the page shows controls
+ *   (live preview only, never thumbnails or PDF)
+ */
+export function renderResume(r, opts = {}) {
+  const E = opts.editable ? editing(true) : PLAIN;
   const t = templateOf(r.templateId);
-  const summary = section('Summary', textBlock(r.summary));
-  const experience = section('Experience', experienceHtml(r));
-  const education = section('Education', educationHtml(r));
-  const projects = section('Projects', projectsHtml(r));
-  const achievements = section('Achievements', achievementsHtml(r));
+  const summary = section('Summary', summaryHtml(r, E));
+  const experience = section('Experience', experienceHtml(r, E));
+  const education = section('Education', educationHtml(r, E));
+  const projects = section('Projects', projectsHtml(r, E));
+  const achievements = section('Achievements', achievementsHtml(r, E));
+  const panel = (title, inner, group, path) => panelSection(E, title, inner, group, path);
 
   if (t.layout === 'side-left' || t.layout === 'side-right') {
     const contacts = contactItems(r.personal);
     const contactSec = contacts.length ? section('Contact', `<ul class="r-plain">${contacts.map(c => `<li>${c}</li>`).join('')}</ul>`) : '';
     const sideRest = [
-      section('Skills', skillsList(r)),
-      section('Languages', entriesList(r.languages)),
-      section('Certifications', entriesList(r.certifications)),
-      section('Interests', listBlock(r.interests)),
+      panel('Skills', skillsList(r), 'skills', 'skills'),
+      panel('Languages', entriesList(r.languages), 'extra', 'languages'),
+      panel('Certifications', entriesList(r.certifications), 'extra', 'certifications'),
+      panel('Interests', listBlock(r.interests), 'interests', 'interests'),
     ].join('');
     const main = `<main class="r-main">${summary}${experience}${education}${projects}${achievements}</main>`;
     if (t.layout === 'side-left') {
-      return pageWrap(r, `<div class="r-cols"><aside class="r-side">${header(r.personal, 'sidebar')}${contactSec}${sideRest}</aside>${main}</div>`);
+      return pageWrap(r, `<div class="r-cols"><aside class="r-side">${header(r.personal, 'sidebar', E)}${contactSec}${sideRest}</aside>${main}</div>`);
     }
-    return pageWrap(r, `${header(r.personal, t.header)}<div class="r-cols">${main}<aside class="r-side">${sideRest}</aside></div>`);
+    return pageWrap(r, `${header(r.personal, t.header, E)}<div class="r-cols">${main}<aside class="r-side">${sideRest}</aside></div>`);
   }
 
   if (t.layout === 'profile') {
     const side = [
-      section('Skills', skillsChips(r)),
-      section('Certifications', entriesList(r.certifications)),
-      section('Languages', entriesList(r.languages, { levels: true })),
+      panel('Skills', skillsChips(r), 'skills', 'skills'),
+      panel('Certifications', entriesList(r.certifications), 'extra', 'certifications'),
+      panel('Languages', entriesList(r.languages, { levels: true }), 'extra', 'languages'),
       t.sideEducation ? education : '',
       achievements,
-      section('Interests', listBlock(r.interests)),
+      panel('Interests', listBlock(r.interests), 'interests', 'interests'),
     ].join('');
     const main = `${experience}${t.sideEducation ? '' : education}${projects}`;
-    return pageWrap(r, `${header(r.personal, 'banner', r.summary)}<div class="b-body p-cols"><main class="r-main">${main}</main>${side ? `<aside class="r-side">${side}</aside>` : ''}</div>`);
+    return pageWrap(r, `${header(r.personal, 'banner', E, r.summary)}<div class="b-body p-cols"><main class="r-main">${main}</main>${side ? `<aside class="r-side">${side}</aside>` : ''}</div>`);
   }
 
-  const skills = section('Skills', t.skills === 'chips' ? skillsChips(r) : skillsInline(r));
+  const skills = panel('Skills', t.skills === 'chips' ? skillsChips(r) : skillsInline(r), 'skills', 'skills');
   const extras = [
-    section('Certifications', entriesInline(r.certifications)),
-    section('Languages', entriesInline(r.languages)),
+    panel('Certifications', entriesInline(r.certifications), 'extra', 'certifications'),
+    panel('Languages', entriesInline(r.languages), 'extra', 'languages'),
     achievements,
-    section('Interests', textBlock(splitList(r.interests).join(' · '))),
+    panel('Interests', textBlock(splitList(r.interests).join(' · ')), 'interests', 'interests'),
   ];
   const order = t.skillsFirst
     ? [summary, skills, experience, projects, education, ...extras]
     : [summary, experience, education, skills, projects, ...extras];
-  if (t.header === 'banner') return pageWrap(r, header(r.personal, 'banner') + `<div class="b-body">${order.join('')}</div>`);
-  return pageWrap(r, header(r.personal, t.header) + order.join(''));
+  if (t.header === 'banner') return pageWrap(r, header(r.personal, 'banner', E) + `<div class="b-body">${order.join('')}</div>`);
+  return pageWrap(r, header(r.personal, t.header, E) + order.join(''));
 }
 
 /**
@@ -302,25 +387,24 @@ export function renderLetter(l, opts = {}) {
   const blocks = opts.editable
     ? `<div class="l-edit" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Letter body" data-edit="body" data-placeholder="Click here and write your letter…">${letterBlocks(l.body)}</div>`
     : letterBlocks(l.body) || '<p class="l-placeholder">Your letter will appear here…</p>';
-  // In the live preview, single-line fields are editable in place; elsewhere ef() returns the plain text.
-  const ef = (path, html, label) => (opts.editable
-    ? `<span class="l-field" contenteditable="plaintext-only" spellcheck="true" role="textbox" aria-label="${label}" data-edit-field="${path}" data-placeholder="${label}">${html}</span>`
-    : html);
+  // In the live preview, single-line fields are editable in place; elsewhere E.f() returns the plain text.
+  const E = opts.editable ? editing(true) : PLAIN;
+  const ef = E.f;
   // "To" and the closing are always printed; empty fields fall back to sensible defaults.
   let toLines;
   if (opts.editable) {
-    const nameShown = esc(rec.name) || (recipientLines.length ? '' : 'Hiring Manager');
+    const nameShown = rec.name || (recipientLines.length ? '' : 'Hiring Manager');
     toLines = [ef('recipient.name', nameShown, 'Recipient name'),
-      ...['title', 'company', 'address'].filter(k => rec[k]).map(k => ef(`recipient.${k}`, esc(rec[k]), `Recipient ${k}`))];
+      ...['title', 'company', 'address'].filter(k => rec[k]).map(k => ef(`recipient.${k}`, rec[k], `Recipient ${k}`))];
   } else {
     toLines = recipientLines.length ? recipientLines : ['Hiring Manager'];
   }
-  const closing = ef('closing', esc(l.closing?.trim() || 'Sincerely,'), 'Closing');
+  const closing = ef('closing', l.closing?.trim() || 'Sincerely,', 'Closing');
   const signer = esc(l.personal.name) || 'Your Name';
-  const greeting = ef('greeting', esc(l.greeting?.trim() || 'Dear Hiring Manager,'), 'Greeting');
-  const date = ef('date', esc(l.date), 'Date');
+  const greeting = ef('greeting', l.greeting?.trim() || 'Dear Hiring Manager,', 'Greeting');
+  const date = ef('date', l.date, 'Date');
   if (t.header === 'banner') {
-    return pageWrap(l, `${header(l.personal, 'banner')}<div class="b-body l-banner">
+    return pageWrap(l, `${header(l.personal, 'banner', E)}<div class="b-body l-banner">
       <div class="b-to">
         <div class="b-label">To</div><div class="b-rec">${toLines.join('<br>')}</div>
         <div class="b-rule"></div>
@@ -343,11 +427,11 @@ export function renderLetter(l, opts = {}) {
   </div>`;
   if (t.layout === 'side-left') {
     const contacts = contactItems(l.personal);
-    return pageWrap(l, `<div class="r-cols"><aside class="r-side">${header(l.personal, 'sidebar')}${
+    return pageWrap(l, `<div class="r-cols"><aside class="r-side">${header(l.personal, 'sidebar', E)}${
       contacts.length ? section('Contact', `<ul class="r-plain">${contacts.map(c => `<li>${c}</li>`).join('')}</ul>`) : ''
     }</aside><main class="r-main">${body}</main></div>`);
   }
-  return pageWrap(l, header(l.personal, t.header) + body);
+  return pageWrap(l, header(l.personal, t.header, E) + body);
 }
 
-export const renderDoc = (d, opts) => (d.type === 'cover' ? renderLetter(d, opts) : renderResume(d));
+export const renderDoc = (d, opts) => (d.type === 'cover' ? renderLetter(d, opts) : renderResume(d, opts));

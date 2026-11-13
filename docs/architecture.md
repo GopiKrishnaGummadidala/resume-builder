@@ -43,12 +43,12 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | Layer | Module | Responsibility | Touches the DOM |
 |---|---|---|---|
 | Views | `app.js` | Hash router; home, templates and documents views; app-wide actions (new, import, delete) | yes |
-| | `editor.js` | Editor: form, live preview, coach panel, in-page editing, download | yes |
+| | `editor.js` | Editor: on-page editing, tool rail, form and coach panels, toolbar menus, download | yes |
 | | `tools.js` | ATS checker and job matcher views | yes |
 | | `preview.js` | Scales A4 pages to fit their container | yes |
 | Services | `pdf-export.js` | Builds a PDF from a document | yes (off-screen render) |
 | | `importer.js` | Reads PDF/TXT files; turns résumé text into a structured CV | no (pdf.js only) |
-| | `richtext.js` | Converts pasted HTML and the in-page editor's DOM to letter markup; bold/heading toggles | yes |
+| | `richtext.js` | Converts pasted HTML and the in-page editors' DOM to stored text (letter markup, bullet lines); bold/heading toggles | yes |
 | | `platform.js` | Loads CDN libraries (pinned + integrity hash); saves files; detects the host | yes |
 | | `photo.js` | Crops an uploaded image to a square and shrinks it to a 320 px JPEG | yes (canvas) |
 | | `ui.js` | Query helpers, toast, confirm and file-name dialogs, path get/set | yes |
@@ -58,7 +58,7 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `templates.js` | Renders a document to an HTML string; escaping | no |
 | | `data.js` | Document shapes, defaults, validation (`normalizeDoc`), samples | no |
 
-The core layer is plain JavaScript with no browser APIs, which is why the 118 unit tests run in Node without a browser or any test library.
+The core layer is plain JavaScript with no browser APIs, which is why the 124 unit tests run in Node without a browser or any test library.
 
 ```mermaid
 flowchart TD
@@ -98,7 +98,15 @@ The 14 templates are rows in one table (`TEMPLATES`). Each row names a layout (`
 One `localStorage` entry holds `{ schema, docs, deleted }`. Every save is read–merge–write so that two open tabs do not overwrite each other. Details are in [concurrency.md](concurrency.md).
 
 ### Editor (`editor.js`)
-The form and the page preview edit the same in-memory object. Typing in the form re-renders the page. Typing on the page (the letter body and four single-line fields are editable in place) updates the object and the form, but does not re-render the page until focus leaves it, so the caret never jumps.
+The page is the editor. `renderDoc(doc, { editable: true })` draws the same page as the PDF, with three additions that exist only in the live preview:
+
+- **Text fields**: every piece of text is a `contenteditable` element carrying the path of the value it edits (`data-edit-field="experience.0.role"`). Bullet lists and paragraphs that allow bold use `data-edit-lines` and are read back with `editableToLines()`.
+- **Controls**: move up, move down and remove on each entry, "+ Add" at the end of each list, and a pencil on content that is not typed on the page (contact details, photo, skills, certifications, languages, interests). The pencil opens the form at that field.
+- **Empty sections**: every section is offered while editing; the plain render prints only sections that have content.
+
+The helpers that add these live in one place (`editing()` in `templates.js`). With editing off they return plain text or nothing, which is what keeps editors and controls out of thumbnails and the PDF; a unit test checks that for every template.
+
+Typing on the page updates the in-memory document and the matching form input, but does not re-render the page until focus leaves it, so the caret never jumps. A tool rail opens two side panels: "All fields" (the complete form, which edits the same document) and "Coach". Which panels are open is remembered in `localStorage` (`craftfolio.ui`); both are closed on a first visit.
 
 The toolbar has Layout, Fonts and Themes menus (native `<details>` elements) and undo/redo. Undo keeps up to 100 snapshots of the document as JSON (`history.js`). Typing is recorded after a half-second pause so one step is a phrase; other changes are recorded at once. History lives in memory for the open editor only.
 
@@ -136,4 +144,6 @@ These are deliberate trade-offs or open items, listed so a reviewer does not hav
 7. **A photo is stored inside the document** (about 30 KB as text), so it is repeated in every document and every undo snapshot that has one. Fine for tens of documents.
 8. **A document with a photo uses a 256-colour page image** instead of 48, so the photo has no visible bands. Such a PDF is somewhat larger (123 KB for the sample CV with a photo).
 9. **The photo is cropped to its centre square**; there is no manual crop.
-10. **`contenteditable="plaintext-only"`** (single-line fields on the page) needs Chrome/Edge/Safari or Firefox 136+. In older Firefox those four fields are still editable from the form.
+10. **`contenteditable="plaintext-only"`** (single-line fields on the page) needs Chrome/Edge/Safari or Firefox 136+. In older Firefox those fields are still editable from the "All fields" panel.
+11. **Not everything is typed on the page.** Contact details, photo, skills, certifications, languages and interests are drawn in a different form than they are stored (icons, chips, level bars), so they are edited in the form, opened by a pencil.
+12. **While editing, empty optional fields show grey placeholders** that take up space, so a sparse CV can look slightly longer on screen than in the PDF.

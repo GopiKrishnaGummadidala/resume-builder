@@ -10,6 +10,11 @@ const PDF_BUDGET_KB = 200;
 const expectedNoise = msg => /profile\.local\.js|Failed to load resource.*404/.test(msg);
 
 test.beforeEach(async ({ page }, testInfo) => {
+  // Most tests fill the complete form, so its panel starts open. The "editing on the page" tests
+  // start like a first visit, with both panels closed.
+  if (!testInfo.titlePath.includes('editing on the page')) {
+    await page.addInitScript(() => localStorage.setItem('craftfolio.ui', '{"form":true,"coach":true}'));
+  }
   const errors = [];
   page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));
   page.on('console', m => { if (m.type() === 'error' && !expectedNoise(m.text())) errors.push(`console: ${m.text()}`); });
@@ -79,7 +84,7 @@ test.describe('CV editor', () => {
   test('add a position, strengthen its bullets, switch template', async ({ page }) => {
     await page.goto('/#documents');
     await page.locator('[data-act="new-resume"]').first().click();
-    await page.locator('[data-act="add-item"][data-list="experience"]').click();
+    await page.locator('.ed-form [data-act="add-item"][data-list="experience"]').click();
     await field(page, 'experience.0.role').fill('Engineer');
     await field(page, 'experience.0.bullets').fill('Responsible for the billing system');
     await page.locator('[data-act="strengthen"]').click();
@@ -566,5 +571,155 @@ test.describe('achievements, interests and entries with detail', () => {
     await page.locator('[data-role="template"]').selectOption('classic'); // content survives a template switch
     await expect(live(page).locator('[data-sec="achievements"]')).toContainText('Load time');
     await expect(live(page).locator('[data-sec="languages"]')).toContainText('German – Elementary');
+  });
+});
+
+test.describe('editing on the page', () => {
+  const onPage = (page, path) => live(page).locator(`[data-edit-field="${path}"]`);
+  /** The saved document, read back from the store. `pick` runs here in the test, not in the page. */
+  const stored = async (page, pick) => pick(await page.evaluate(async () => {
+    const { store } = await import('/js/store.js');
+    store.flush();
+    return store.get(location.hash.replace('#edit-', ''));
+  }));
+  async function retype(page, locator, text) {
+    await locator.click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type(text);
+  }
+
+  test('the page is the editor: no form until it is asked for, and the choice is remembered', async ({ page }) => {
+    await newCv(page);
+    await expect(page.locator('.ed-form')).toBeHidden();
+    await expect(page.locator('#coach')).toBeHidden();
+    await expect(page.locator('#rail-score')).toHaveText(/^\d+$/);
+    await page.getByRole('button', { name: 'All fields' }).click();
+    await expect(field(page, 'personal.name')).toBeVisible();
+    await page.getByRole('button', { name: /Coach/ }).click();
+    await expect(page.locator('#coach')).toContainText('CV score');
+    await page.reload();
+    await expect(field(page, 'personal.name')).toBeVisible();
+    await page.getByRole('button', { name: 'All fields' }).click();
+    await expect(page.locator('.ed-form')).toBeHidden();
+  });
+
+  test('text typed on the page is saved, and undo brings the old text back', async ({ page }) => {
+    await newCv(page);
+    await retype(page, onPage(page, 'personal.name'), 'Alex Morgan');
+    await retype(page, onPage(page, 'experience.0.company'), 'Northwind <b>Labs</b>');
+    await retype(page, onPage(page, 'experience.0.end'), '2024');
+    await page.locator('.ed-preview').click({ position: { x: 5, y: 5 } }); // leave the field
+    await expect(onPage(page, 'experience.0.company')).toHaveText('Northwind <b>Labs</b>');
+    expect(await stored(page, d => [d.personal.name, d.experience[0].company, d.experience[0].end])).toEqual(['Alex Morgan', 'Northwind <b>Labs</b>', '2024']);
+    await page.reload();
+    await expect(onPage(page, 'personal.name')).toHaveText('Alex Morgan');
+
+    await retype(page, onPage(page, 'personal.title'), 'Design Lead');
+    await page.locator('.ed-preview').click({ position: { x: 5, y: 5 } });
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(onPage(page, 'personal.title')).toHaveText('Senior Product Designer');
+  });
+
+  test('bullets are typed on the page: Enter starts a new one, Ctrl+B makes bold', async ({ page }) => {
+    await newCv(page);
+    const bullets = live(page).locator('[data-edit-lines="experience.1.bullets"]');
+    await bullets.locator('li').last().click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Cut build time ');
+    await page.keyboard.press('ControlOrMeta+B');
+    await page.keyboard.type('by half');
+    await page.keyboard.press('ControlOrMeta+B');
+    expect((await stored(page, d => d.experience[1].bullets)).split('\n')).toEqual([
+      'Designed self-serve billing that reduced support tickets by 31%',
+      'Partnered with engineering to cut design-to-dev handoff time in half',
+      'Launched accessibility audit bringing core flows to WCAG 2.1 AA',
+      'Cut build time **by half**',
+    ]);
+    await page.locator('.ed-preview').click({ position: { x: 5, y: 5 } });
+    await expect(bullets.locator('li')).toHaveCount(4);
+    await expect(bullets.locator('li').last().locator('strong')).toHaveText('by half');
+  });
+
+  test('pasting into a bullet keeps the text and drops the markup', async ({ page }) => {
+    await newCv(page);
+    const bullets = live(page).locator('[data-edit-lines="experience.0.bullets"]');
+    await bullets.locator('li').first().click();
+    await page.keyboard.press('Home');
+    await bullets.evaluate(el => {
+      const data = new DataTransfer();
+      data.setData('text/html', '<span style="color:red;font-size:40px">Styled </span><img src=x onerror="window.__x=1">');
+      data.setData('text/plain', 'Styled ');
+      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    });
+    await expect(bullets.locator('li').first()).toHaveText(/^Styled Led redesign/);
+    await expect(bullets.locator('img, span[style]')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__x)).toBeUndefined();
+  });
+
+  test('entries are added, moved and removed from the page', async ({ page }) => {
+    await newCv(page);
+    const exp = live(page).locator('[data-sec="experience"]');
+    await exp.getByRole('button', { name: 'Add position' }).click();
+    await expect(onPage(page, 'experience.2.role')).toBeFocused();
+    await page.keyboard.type('Intern');
+    await expect(exp.locator('.r-item')).toHaveCount(3);
+
+    const third = exp.locator('.r-item').nth(2);
+    await third.hover();
+    await third.getByRole('button', { name: 'Move up' }).click();
+    expect(await stored(page, d => d.experience.map(e => e.role))).toEqual(['Senior Product Designer', 'Intern', 'Product Designer']);
+    const second = exp.locator('.r-item').nth(1);
+    await second.hover();
+    await second.getByRole('button', { name: 'Remove' }).click();
+    expect(await stored(page, d => d.experience.map(e => e.role))).toEqual(['Senior Product Designer', 'Product Designer']);
+    await exp.locator('.r-item').first().hover(); // controls show on hover or focus
+    await expect(exp.locator('.r-item').first().getByRole('button', { name: 'Move up' })).toBeDisabled();
+  });
+
+  test('a new CV can be written from an empty page', async ({ page }) => {
+    await page.goto('/#documents');
+    await page.locator('[data-act="new-resume"]').first().click();
+    await retype(page, onPage(page, 'personal.name'), 'Ada Lovelace');
+    await onPage(page, 'summary').click();
+    await page.keyboard.type('Engineer who builds reliable billing systems.');
+    await live(page).getByRole('button', { name: 'Add position' }).click();
+    await page.keyboard.type('Engineer');
+    await live(page).locator('[data-edit-lines="experience.0.bullets"]').click();
+    await page.keyboard.type('Rebuilt invoicing');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Cut failed payments by 12%');
+    expect(await stored(page, d => [d.personal.name, d.summary, d.experience[0].role, d.experience[0].bullets])).toEqual(
+      ['Ada Lovelace', 'Engineer who builds reliable billing systems.', 'Engineer', 'Rebuilt invoicing\nCut failed payments by 12%']);
+    await page.goto('/#documents'); // the saved card is the plain render: no controls, no placeholders
+    await expect(page.locator('.doc-card .page')).toContainText('Rebuilt invoicing');
+    await expect(page.locator('.doc-card .page button, .doc-card .page [contenteditable]')).toHaveCount(0);
+  });
+
+  test('the pencil opens the form at the right field', async ({ page }) => {
+    await newCv(page);
+    await live(page).getByRole('button', { name: 'Edit skills' }).click();
+    await expect(field(page, 'skills')).toBeFocused();
+    await field(page, 'skills').fill('Figma, Research');
+    await expect(live(page).locator('[data-sec="skills"]')).toContainText('Research');
+    await live(page).getByRole('button', { name: 'Edit contact details and photo' }).click();
+    await expect(field(page, 'personal.email')).toBeFocused();
+    await live(page).getByRole('button', { name: 'Edit languages' }).click();
+    await expect(field(page, 'languages')).toBeFocused();
+  });
+
+  test('the downloaded PDF has no editing controls or placeholders', async ({ page }) => {
+    await page.goto('/#documents');
+    await page.locator('[data-act="new-resume"]').first().click();
+    await retype(page, onPage(page, 'personal.name'), 'Ada Lovelace');
+    const text = await page.evaluate(async () => {
+      const { store } = await import('/js/store.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      const { fileToText } = await import('/js/importer.js');
+      const { blob } = await buildPdf(store.get(location.hash.replace('#edit-', '')), document.querySelector('#print-area'));
+      return (await fileToText(new File([blob], 'cv.pdf', { type: 'application/pdf' }))).replace(/\s+/g, ' ');
+    });
+    expect(text).toContain('Ada Lovelace');
+    for (const word of ['Add position', 'Job title', 'Summary:', 'Add skills']) expect(text).not.toContain(word);
   });
 });

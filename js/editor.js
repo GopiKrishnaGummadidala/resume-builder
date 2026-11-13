@@ -1,5 +1,6 @@
-// The document editor: form on the left, live A4 preview in the middle, coach on the right.
-// The form and the preview both edit the same in-memory document; every change is saved through the store.
+// The document editor: the page itself is the editor. Text is typed directly on the page; a tool rail
+// opens two side panels, "All fields" (the complete form) and "Coach". The page and the form edit the
+// same in-memory document; every change is saved through the store.
 import {
   draftLetterBody, THEME_COLORS, FONTS, uid, splitLines, DEFAULT_PERSONAL, LETTER_TITLE, letterTitle,
   PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, validPhoto,
@@ -7,7 +8,7 @@ import {
 import { store } from './store.js';
 import { TEMPLATES, renderDoc, esc, letterBlocks } from './templates.js';
 import { coachResume, coachLetter, strengthenBullet } from './analysis.js';
-import { htmlToLetterText, editableToLetterText, toggleBold, toggleHeading, editableBold, editableHeading } from './richtext.js';
+import { htmlToLetterText, editableToLetterText, editableToLines, toggleBold, toggleHeading, editableBold, editableHeading } from './richtext.js';
 import { $, $$, toast, confirmDialog, fileNameDialog, setPath, getPath } from './ui.js';
 import { saveFile } from './platform.js';
 import { buildPdf, pdfName } from './pdf-export.js';
@@ -183,6 +184,16 @@ function toolbarMenus(doc) {
     </details>`;
 }
 
+/** Which side panels are open. Remembered in this browser; both are closed the first time. */
+const PREFS_KEY = 'craftfolio.ui';
+const panels = { form: false, coach: false };
+try {
+  const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+  panels.form = saved.form === true;
+  panels.coach = saved.coach === true;
+} catch { /* no saved preference, or storage is unavailable */ }
+const savePanels = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(panels)); } catch { /* not remembered */ } };
+
 export function editorPage(id) {
   const doc = store.get(id);
   if (!doc) return `<section class="section"><h1>Document not found</h1><a class="btn btn-primary" href="#documents">Back to my documents</a></section>`;
@@ -198,19 +209,25 @@ export function editorPage(id) {
         ${toolbarMenus(doc)}
       </div>
       <div class="tb-group">
-        <button class="btn btn-sm btn-ghost" data-act="export-json">Export JSON</button>
-        ${doc.type !== 'cover' ? `<a class="btn btn-sm btn-ghost" href="#match-${doc.id}">Match to job</a>` : ''}
         <button class="btn btn-sm btn-primary" data-act="download">⬇ Download PDF</button>
       </div>
     </div>
     <div class="ed-body">
-      <div class="ed-form no-print">${doc.type === 'cover' ? letterForm(doc) : resumeForm(doc)}</div>
+      <nav class="ed-rail no-print" aria-label="Editor tools">
+        <button type="button" class="rail-btn" data-act="panel" data-panel="form" aria-pressed="${panels.form}"><span class="rail-ico" aria-hidden="true">☰</span><span>All fields</span></button>
+        <button type="button" class="rail-btn" data-act="panel" data-panel="coach" aria-pressed="${panels.coach}"><span class="rail-ico" aria-hidden="true">◔</span><span>Coach</span><span class="rail-badge" id="rail-score"></span></button>
+        ${doc.type !== 'cover' ? `<a class="rail-btn" href="#match-${doc.id}"><span class="rail-ico" aria-hidden="true">⇄</span><span>Match to job</span></a>
+        <a class="rail-btn" href="#ats"><span class="rail-ico" aria-hidden="true">✓</span><span>ATS checker</span></a>` : ''}
+        <a class="rail-btn" href="#templates${doc.type === 'cover' ? '-cover' : ''}"><span class="rail-ico" aria-hidden="true">▦</span><span>Templates</span></a>
+        <button type="button" class="rail-btn" data-act="export-json"><span class="rail-ico" aria-hidden="true">⭳</span><span>Export JSON</span></button>
+      </nav>
+      <div class="ed-form no-print" ${panels.form ? '' : 'hidden'}>${doc.type === 'cover' ? letterForm(doc) : resumeForm(doc)}</div>
       <div class="ed-preview">
-        ${doc.type === 'cover' ? '<p class="edit-tip no-print">Click the letter to edit it directly: recipient, date, greeting, body and closing. Ctrl+B for bold.</p>' : ''}
+        <p class="edit-tip no-print">Click any text on the page to edit it. ${doc.type === 'cover' ? 'Ctrl+B for bold.' : 'Use + to add an entry and ✎ for contact details, photo and skills.'}</p>
         <div class="page-fit" id="live">${renderDoc(doc, { editable: true })}</div>
         <p class="overflow-warn" hidden>Content runs past one page — it will continue on page 2 in the PDF.</p>
       </div>
-      <aside class="ed-coach no-print" id="coach">${coachPanel(doc)}</aside>
+      <aside class="ed-coach no-print" id="coach" ${panels.coach ? '' : 'hidden'}>${coachPanel(doc)}</aside>
     </div>
   </div>`;
 }
@@ -228,6 +245,25 @@ export function mountEditor() {
     const page = $('.page', live);
     $('.overflow-warn', root).hidden = page.scrollHeight <= pageSize(doc).H + 2;
     $('#coach').innerHTML = coachPanel(doc);
+    $('#rail-score').textContent = $('#coach .ring span').textContent;
+  };
+
+  // Side panels (the complete form, the coach), opened from the tool rail.
+  const setPanel = (name, open) => {
+    panels[name] = open;
+    savePanels();
+    $(name === 'form' ? '.ed-form' : '#coach', root).hidden = !open;
+    $(`[data-panel="${name}"]`, root).setAttribute('aria-pressed', String(open));
+    fitPages(root);
+  };
+  /** Open the form at one field: for content that is not typed on the page (contact, photo, skills). */
+  const openField = (groupKey, path) => {
+    setPanel('form', true);
+    const group = $(`.ed-form .group[data-group="${groupKey}"]`, root);
+    if (group) group.open = true;
+    const input = $(`.ed-form [data-path="${path}"]`, root);
+    input?.focus();
+    input?.scrollIntoView({ block: 'center' });
   };
   const refresh = () => {
     live.innerHTML = renderDoc(doc, { editable: true });
@@ -378,6 +414,34 @@ export function mountEditor() {
   }
   live.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.closest?.('[data-edit-field]')) { e.preventDefault(); e.target.blur(); }
+    const lines = e.target.closest?.('[data-edit-lines]');
+    if (!lines) return;
+    if (e.key === 'Enter' && lines.tagName !== 'UL') { e.preventDefault(); lines.blur(); } // a paragraph is one line; a list gets a new bullet
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); document.execCommand('bold'); }
+  });
+  // Bullet lists and paragraphs typed on the page (CV achievements and descriptions).
+  live.addEventListener('input', e => {
+    const lines = e.target.closest?.('[data-edit-lines]');
+    if (!lines) return;
+    const path = lines.dataset.editLines;
+    const value = editableToLines(lines);
+    setPath(doc, path, value);
+    const input = $(`.ed-form [data-path="${path}"]`, root);
+    if (input) input.value = value;
+    updateAround();
+    save();
+  });
+  live.addEventListener('paste', e => {
+    if (!e.target.closest?.('[data-edit-lines]')) return;
+    e.preventDefault(); // text only: never the source's fonts, colours or markup
+    const text = e.clipboardData?.getData('text/plain') || '';
+    if (text) document.execCommand('insertText', false, text);
+  });
+  live.addEventListener('click', e => {
+    const opener = e.target.closest?.('[data-edit-open]');
+    if (!opener) return;
+    refresh();
+    openField(opener.dataset.editOpen, opener.dataset.editFocus);
   });
   live.addEventListener('input', e => {
     const ed = e.target.closest?.('.l-edit');
@@ -402,7 +466,8 @@ export function mountEditor() {
   });
   live.addEventListener('focusout', e => {
     // Re-render once editing ends so the page shows exactly what will print.
-    if ((e.target.classList?.contains('l-edit') || e.target.dataset?.editField) && !live.contains(e.relatedTarget)) refresh();
+    const edited = e.target.classList?.contains('l-edit') || e.target.dataset?.editField || e.target.dataset?.editLines;
+    if (edited && !live.contains(e.relatedTarget)) refresh();
   });
   // Keep the selection in the page when pressing the toolbar buttons.
   root.addEventListener('mousedown', e => {
@@ -431,7 +496,8 @@ export function mountEditor() {
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const act = b.dataset.act;
-    if (act === 'undo') undo();
+    if (act === 'panel') setPanel(b.dataset.panel, !panels[b.dataset.panel]);
+    else if (act === 'undo') undo();
     else if (act === 'redo') redo();
     else if (act === 'color' || act === 'font' || act === 'layout-reset') {
       if (act === 'color') doc.theme.color = b.dataset.color;
@@ -451,8 +517,11 @@ export function mountEditor() {
         education: { degree: '', school: '', location: '', start: '', end: '', details: '' },
         projects: { name: '', link: '', description: '' },
       }[list];
+      const fromPage = live.contains(b); // checked before the page is redrawn
       doc[list].push({ id: uid(), ...blank });
       rerenderForm();
+      // Added from the page: start typing in the new entry straight away.
+      if (fromPage) $(`[data-edit-field^="${list}.${doc[list].length - 1}."]`, live)?.focus();
     } else if (act === 'remove-item') {
       doc[b.dataset.list].splice(+b.dataset.i, 1);
       rerenderForm();

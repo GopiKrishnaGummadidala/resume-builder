@@ -306,3 +306,70 @@ describe('richer CV content', () => {
     assert.ok(profile.indexOf('data-sec="education"') < profile.indexOf('<aside class="r-side">'));
   });
 });
+
+describe('editing on the page', () => {
+  const strip = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+  test('the plain render has no editors and no controls, in any template', () => {
+    for (const t of TEMPLATES) {
+      for (const doc of [sampleResume(t.id), blankResume(t.id), { ...sampleLetter(), templateId: t.id }]) {
+        const html = renderDoc(doc);
+        for (const mark of ['contenteditable', 'data-edit-', '<button', 'ed-ctl', 'ed-add']) assert.equal(html.includes(mark), false, `${t.id} ${doc.type}: ${mark}`);
+      }
+    }
+  });
+
+  test('an editable CV shows the same words as the plain one', () => {
+    for (const t of TEMPLATES) {
+      const r = sampleResume(t.id);
+      r.experience[1].about = 'Billing tools for clinics'; // optional fields filled, so no placeholders differ
+      assert.equal(strip(renderResume(r, { editable: true })), strip(renderResume(r)), t.id);
+    }
+  });
+
+  test('every text field of a CV is editable in place, in every template', () => {
+    const paths = [
+      'personal.name', 'personal.title', 'summary',
+      'experience.0.role', 'experience.0.company', 'experience.0.location', 'experience.0.about', 'experience.0.start', 'experience.0.end',
+      'experience.1.role', 'education.0.degree', 'education.0.school', 'education.0.location', 'education.0.start', 'education.0.end', 'education.0.details',
+      'projects.0.name', 'projects.0.link', 'projects.0.description', 'achievements.0.title', 'achievements.0.date',
+    ];
+    for (const t of TEMPLATES) {
+      const html = renderResume(sampleResume(t.id), { editable: true });
+      for (const p of paths) assert.equal(html.split(`data-edit-field="${p}"`).length - 1, 1, `${t.id}: ${p}`);
+      for (const p of ['experience.0.bullets', 'experience.1.bullets', 'achievements.0.description']) assert.equal(html.split(`data-edit-lines="${p}"`).length - 1, 1, `${t.id}: ${p}`);
+      for (const list of ['experience', 'education', 'projects', 'achievements']) assert.ok(html.includes(`data-act="add-item" data-list="${list}"`), `${t.id}: add ${list}`);
+      for (const group of ['personal', 'skills', 'extra', 'interests']) assert.ok(html.includes(`data-edit-open="${group}"`), `${t.id}: open ${group}`);
+    }
+  });
+
+  test('an empty CV offers every section while editing, and prints none of them', () => {
+    for (const t of TEMPLATES) {
+      const blank = blankResume(t.id);
+      blank.personal = Object.fromEntries(Object.keys(blank.personal).map(k => [k, '']));
+      const editable = renderResume(blank, { editable: true });
+      for (const sec of ['experience', 'education', 'projects', 'achievements', 'skills', 'languages', 'certifications', 'interests']) {
+        assert.ok(editable.includes(`data-sec="${sec}"`), `${t.id}: ${sec}`);
+        assert.equal(renderResume(blank).includes(`data-sec="${sec}"`), false, `${t.id}: ${sec} printed`);
+      }
+    }
+  });
+
+  test('move controls are disabled at the ends of a list', () => {
+    const html = renderResume(sampleResume(), { editable: true });
+    assert.ok(html.includes('data-act="move" data-list="experience" data-i="0" data-dir="-1" disabled'));
+    assert.ok(html.includes('data-act="move" data-list="experience" data-i="1" data-dir="1" disabled'));
+    assert.ok(html.includes('data-act="move" data-list="experience" data-i="0" data-dir="1" data-label'));
+    assert.ok(html.includes('data-act="remove-item" data-list="experience" data-i="1"'));
+  });
+
+  test('editable fields escape their content', () => {
+    for (const t of TEMPLATES) {
+      const r = sampleResume(t.id);
+      r.personal.name = r.summary = r.experience[0].role = r.experience[0].about = r.experience[0].bullets = r.achievements[0].description = XSS;
+      const html = renderResume(r, { editable: true });
+      assert.equal(html.includes('<img'), false, t.id);
+      assert.equal(/onerror=alert\(1\)>/.test(html), false, t.id);
+    }
+  });
+});

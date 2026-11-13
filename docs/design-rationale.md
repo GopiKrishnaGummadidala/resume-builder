@@ -75,11 +75,13 @@ Storing HTML would mean sanitising it on every load and trusting it on every ren
 
 ## 6. Editing on the page with `contenteditable`
 
-**Decision:** the letter body and four single-line fields are editable directly in the preview; the form stays as the complete, always-available editor.
+**Decision:** the page is the primary editor for CVs and letters: all running text is typed on it, and entries are added, moved and removed there. The form stays as the complete editor in a side panel, closed by default.
+
+The first version had the form as the main editor, with the page as a preview. People edit a CV by looking at it, so the roles were swapped. Both write to the same in-memory document through the same paths, so neither is a second implementation.
 
 A full rich-text library (ProseMirror, Quill) would be the largest dependency in the project for two formatting features. The approach here is small: let the browser edit, read the DOM back into the stored markup, and never re-render the page while it has focus. Pastes are intercepted so foreign fonts and colours never enter the document.
 
-**Cost:** browser editing behaviour differs slightly between engines. Because the form is always there, a quirk on the page cannot block anyone.
+**Cost:** browser editing behaviour differs slightly between engines. Because the form is always one click away, a quirk on the page cannot block anyone. Content that is displayed differently from how it is stored (skill chips, contact icons) is not typed on the page; a pencil opens its form field.
 
 ## 7. Storage: one entry, merged per document
 

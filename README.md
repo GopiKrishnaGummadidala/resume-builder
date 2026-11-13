@@ -28,7 +28,7 @@ Then open http://localhost:5180. Any static file server works (for example `pyth
 
 ## Features
 
-- **CV builder**: 14 templates. Single-column: Banner, Classic, Minimal, Executive, Tech, Timeline, Elegant, Bold, Corporate. Two-column: Profile, Signature, Modern, Studio, Compact. Live preview, reorderable sections.
+- **CV builder**: 14 templates. Single-column: Banner, Classic, Minimal, Executive, Tech, Timeline, Elegant, Bold, Corporate. Two-column: Profile, Signature, Modern, Studio, Compact. The page is the editor: click any text to change it, add, move and remove entries on the page, and open the complete form or the coach from the tool rail when you want them.
 - **CV sections**: summary, experience (with an optional line about each company and **bold** in bullets), education, skills, projects, certifications and languages (each with an optional detail and date, written `Name | detail | date`), achievements and interests.
 - **Layout, Fonts, Themes**: content spacing, page margins and page size (A4 or US Letter); 8 fonts; 8 colours or any custom colour.
 - **Photo**: optional profile photo, cropped to a square and shrunk in the browser before it is stored.
@@ -58,8 +58,8 @@ npm ci
 | Command | What it does |
 |---|---|
 | `npm run lint` | ESLint over the app, tests and scripts |
-| `npm test` | 118 unit tests (Node's built-in runner, no browser) |
-| `npm run test:e2e` | 34 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
+| `npm test` | 124 unit tests (Node's built-in runner, no browser) |
+| `npm run test:e2e` | 42 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
 | `npm run serve` | Static dev server on port 5180 |
 | `npm run load` | HTTP load test against the running container |
 | `node scripts/bench.mjs` | Timings for rendering, coaching, storage |
@@ -87,7 +87,7 @@ artifact.html         same markup for the hosted Claude artifact
 css/styles.css        app interface, light/dark, responsive
 css/templates.css     document templates (A4 page)
 js/app.js             router; home, templates and documents views
-js/editor.js          editor: form, live preview, in-page editing, coach
+js/editor.js          editor: on-page editing, tool rail, form and coach panels
 js/tools.js           ATS checker and job matcher views
 js/preview.js         scales A4 pages to fit
 js/pdf-export.js      PDF: indexed PNG page image + invisible text layer

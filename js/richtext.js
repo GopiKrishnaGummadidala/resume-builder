@@ -133,3 +133,14 @@ export function editableHeading(el) {
   const block = (document.queryCommandValue('formatBlock') || '').toLowerCase();
   document.execCommand('formatBlock', false, /^h[1-6]$/.test(block) ? 'p' : 'h4');
 }
+
+/**
+ * Convert an in-page list or paragraph editor back to stored text: one line per block
+ * (each bullet of a list), with bold runs wrapped in **.
+ */
+export function editableToLines(el) {
+  return collectBlocks(el)
+    .map(blk => blockMarkup(blk).replace(/\s*\n\s*/g, ' '))
+    .filter(Boolean)
+    .join('\n');
+}

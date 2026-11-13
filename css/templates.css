@@ -259,3 +259,38 @@
 .tpl-signature .r-level i.on { background: var(--accent); }
 .tpl-signature [data-sec="interests"] ul { display: flex; flex-wrap: wrap; gap: 5px; }
 .tpl-signature [data-sec="interests"] li { margin: 0; border: 1px solid #313c4e; border-radius: 4px; padding: 2px 8px; font-size: 8.8pt; }
+
+/* ===== Editing on the page (live preview only; thumbnails and the PDF use the plain render) ===== */
+.l-lines { outline: none; border-radius: 3px; cursor: text; transition: box-shadow .15s; }
+span.l-lines { padding: 0 2px; margin: 0 -2px; }
+.l-lines:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.l-lines:focus { box-shadow: 0 0 0 2px var(--accent); }
+.l-lines:empty::before { content: attr(data-placeholder); color: #9ca3af; font-style: italic; font-weight: 400; }
+ul.l-lines > li:only-child:empty::before { content: 'Achievement: what you did and the result'; color: #9ca3af; font-style: italic; }
+.l-field:empty::before, .l-lines:empty::before { font-weight: 400; letter-spacing: 0; text-transform: none; }
+/* Placeholders on a dark header stay readable */
+.b-top .l-field:empty::before, .tpl-executive .r-header .l-field:empty::before, .tpl-modern .r-side .l-field:empty::before { color: rgba(255, 255, 255, .6); }
+
+.r-item { position: relative; }
+/* Above the entry, so the controls never cover the text they belong to. */
+.ed-ctl { position: absolute; bottom: calc(100% - 4px); right: 0; z-index: 2; display: none; gap: 3px; padding: 3px; border-radius: 8px; background: #fff; box-shadow: 0 2px 10px rgba(15, 18, 32, .22); }
+.r-item:hover > .ed-ctl, .r-item:focus-within > .ed-ctl { display: flex; }
+.ed-btn, .ed-add { font: 600 12px/1 system-ui, sans-serif; letter-spacing: 0; text-transform: none; cursor: pointer; }
+.ed-btn { width: 22px; height: 22px; border-radius: 6px; border: 1px solid #d5dae2; background: #fff; color: #334155; padding: 0; }
+.ed-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.ed-btn:disabled { opacity: .35; cursor: default; }
+.ed-up::before { content: '↑'; }
+.ed-down::before { content: '↓'; }
+.ed-remove::before { content: '✕'; }
+.ed-remove:hover:not(:disabled) { border-color: #dc2626; color: #dc2626; }
+.ed-pencil { margin-left: auto; flex-shrink: 0; opacity: .55; }
+.ed-pencil::before { content: '✎'; }
+.ed-pencil:hover, .ed-pencil:focus-visible { opacity: 1; }
+.r-h .ed-pencil { float: right; }
+.r-side > .ed-pencil { display: block; margin: 8px 0 0; }
+.ed-add { display: block; width: 100%; margin-top: 6px; padding: 6px 10px; border-radius: 8px; border: 1px dashed #b6bdc9; background: transparent; color: #64748b; text-align: center; opacity: .75; }
+.ed-add::before { content: '+ ' attr(data-label); }
+.ed-add:hover, .ed-add:focus-visible { opacity: 1; border-color: var(--accent); color: var(--accent); }
+/* On a coloured sidebar or header the controls keep their own light surface */
+.tpl-modern .r-side .ed-add { color: #fff; border-color: rgba(255, 255, 255, .6); }
+.tpl-modern .r-side .ed-add:hover { color: #fff; border-color: #fff; }
