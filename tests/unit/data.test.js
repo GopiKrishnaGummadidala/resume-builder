@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeDoc, blankResume, blankLetter, sampleResume, sampleLetter, draftLetterBody, resumeToText,
   formatDate, splitLines, splitList, TEMPLATE_IDS, DEFAULT_TEMPLATE, THEME_COLORS, FONTS, LETTER_TITLE, letterTitle,
-  PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, pageScale, validPhoto, PHOTO_MAX_CHARS,
+  entryParts, languageLevel, PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, pageScale, validPhoto, PHOTO_MAX_CHARS,
 } from '../../js/data.js';
 import { TEMPLATES } from '../../js/templates.js';
 
@@ -202,5 +202,56 @@ describe('photo', () => {
     const cv = sampleResume();
     cv.personal.photo = PHOTO;
     assert.equal(blankLetter(undefined, cv).personal.photo, PHOTO);
+  });
+});
+
+describe('entries with a detail and a date', () => {
+  test('entryParts splits "Title | Detail | Date"', () => {
+    assert.deepEqual(entryParts('Solutions Associate | Microsoft | Feb 2019'), { title: 'Solutions Associate', detail: 'Microsoft', date: 'Feb 2019' });
+    assert.deepEqual(entryParts('German|Elementary'), { title: 'German', detail: 'Elementary', date: '' });
+    assert.deepEqual(entryParts('  Plain entry  '), { title: 'Plain entry', detail: '', date: '' });
+    assert.deepEqual(entryParts('A | B | C | D'), { title: 'A', detail: 'B', date: 'C · D' });
+    assert.deepEqual(entryParts(null), { title: '', detail: '', date: '' });
+  });
+
+  test('languageLevel reads common proficiency words', () => {
+    const cases = { Native: 5, 'Mother tongue': 5, C2: 5, 'Full Professional Proficiency': 4, Fluent: 4, C1: 4, 'Professional working': 3, B2: 3,
+      'Limited working': 2, Intermediate: 2, 'Elementary Proficiency': 1, Basic: 1, A2: 1, '': 0, 'Learning it': 0 };
+    for (const [text, level] of Object.entries(cases)) assert.equal(languageLevel(text), level, text);
+    assert.equal(languageLevel(undefined), 0);
+  });
+});
+
+describe('achievements, interests and company description', () => {
+  test('new CVs have them empty, and the sample fills them', () => {
+    assert.deepEqual(blankResume().achievements, []);
+    assert.equal(blankResume().interests, '');
+    const s = sampleResume();
+    assert.ok(s.achievements.length && s.interests && s.experience[0].about);
+  });
+
+  test('a CV saved before they existed loads with empty values', () => {
+    const old = sampleResume();
+    delete old.achievements;
+    delete old.interests;
+    old.experience.forEach(e => delete e.about);
+    const doc = normalizeDoc(old);
+    assert.deepEqual(doc.achievements, []);
+    assert.equal(doc.interests, '');
+    assert.equal(doc.experience[0].about, '');
+  });
+
+  test('junk in the new fields is cleaned', () => {
+    const doc = normalizeDoc({ ...sampleResume(), achievements: [null, 'x', { title: { a: 1 }, date: 2023, description: ['x'] }], interests: { a: 1 } });
+    assert.equal(doc.achievements.length, 3);
+    assert.deepEqual({ ...doc.achievements[2], id: '' }, { id: '', title: '', date: '2023', description: '' });
+    assert.equal(doc.interests, '');
+    assert.equal(normalizeDoc({ ...sampleResume(), achievements: 'nope' }).achievements.length, 0);
+  });
+
+  test('the plain-text version of a CV includes them', () => {
+    const text = resumeToText(sampleResume());
+    for (const part of ['Analytics platform for mid-size retailers', 'ACHIEVEMENTS', 'Design system adoption (2023)', 'INTERESTS', 'Trail running']) assert.ok(text.includes(part), part);
+    assert.equal(text.includes('**'), false, 'bold markers are not part of the text');
   });
 });

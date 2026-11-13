@@ -58,7 +58,7 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `templates.js` | Renders a document to an HTML string; escaping | no |
 | | `data.js` | Document shapes, defaults, validation (`normalizeDoc`), samples | no |
 
-The core layer is plain JavaScript with no browser APIs, which is why the 107 unit tests run in Node without a browser or any test library.
+The core layer is plain JavaScript with no browser APIs, which is why the 118 unit tests run in Node without a browser or any test library.
 
 ```mermaid
 flowchart TD
@@ -82,7 +82,7 @@ The views also import `data`, `templates` and `ui` directly; those arrows are le
 ### Documents (`data.js`)
 Two document types share a base (`id`, `type`, `title`, `updatedAt`, `templateId`, `theme`, `personal`). `theme` holds the colour, font, content spacing step, page margin step and page size (`a4` or `letter`). `personal` holds the contact details and an optional `photo` (an embedded JPEG, PNG or WebP). On top of the base:
 
-- **CV** adds `summary`, `experience[]`, `education[]`, `skills`, `projects[]`, `certifications`, `languages`.
+- **CV** adds `summary`, `experience[]`, `education[]`, `skills`, `projects[]`, `certifications`, `languages`, `achievements[]`, `interests`. A certification or language is one line of text, optionally `Name | detail | date`; language level dots are derived from the detail ("Fluent", "B2") when it is drawn, not stored.
 - **Cover letter** adds `recipient`, `job`, `date`, `greeting`, `body`, `closing`.
 
 All values are strings. The letter body uses a small markup: a blank line starts a paragraph, a line starting with `# ` is a bold sub-heading, `**text**` is bold.
@@ -92,7 +92,7 @@ All values are strings. The letter body uses a small markup: a blank line starts
 ### Rendering (`templates.js`)
 A document is rendered to an HTML string for a page of fixed size: A4 (794 × 1123 CSS pixels) or US Letter (816 × 1056). The same function produces the live preview, the thumbnails and the page captured for PDF. Every value goes through `esc()`; nothing is inserted as raw HTML.
 
-The 13 templates are rows in one table (`TEMPLATES`). Each row names a layout (`single`, `side-left`, `side-right`, `profile`), a header style and a skills style; the renderer branches on those, never on a template's id. They share one stylesheet (`css/templates.css`) and differ by a class on the page. Page size, spacing and margins reach the stylesheet as CSS variables (`--pw`, `--ph`, `--sp`, `--mg`) computed from validated steps, so no stored value is written into a style.
+The 14 templates are rows in one table (`TEMPLATES`). Each row names a layout (`single`, `side-left`, `side-right`, `profile`), a header style, a skills style and, for the profile layout, whether education sits in the right column; the renderer branches on those, never on a template's id. They share one stylesheet (`css/templates.css`) and differ by a class on the page. Page size, spacing and margins reach the stylesheet as CSS variables (`--pw`, `--ph`, `--sp`, `--mg`) computed from validated steps, so no stored value is written into a style.
 
 ### Storage (`store.js`)
 One `localStorage` entry holds `{ schema, docs, deleted }`. Every save is read–merge–write so that two open tabs do not overwrite each other. Details are in [concurrency.md](concurrency.md).
@@ -126,6 +126,7 @@ Not covered: a browser extension or another script running on the same origin ca
 
 These are deliberate trade-offs or open items, listed so a reviewer does not have to find them.
 
+1. **A long CV is cut into pages wherever the page height falls**, which can split a line or a card between two pages; there are no page-break rules and no page numbers.
 1. **The PDF is an image with a text layer, not vector text.** Zooming far in shows pixels (192 dpi). See design-rationale.md for why.
 2. **PDF export and PDF import need the CDN.** Offline, the editor works but those two features report that the library could not be loaded.
 3. **Whole-document last-write-wins.** Two tabs editing the *same* document at the same time: the later save wins; fields are not merged.

@@ -125,7 +125,20 @@ Spacing and margins are steps (1 to 7 and 1 to 6), not free numbers. A step is v
 
 **Cost:** a template with a truly new structure still needs a new layout path in `templates.js`.
 
-## 12. Photo stored in the document, shrunk on upload
+## 12. Certifications and languages stay as text, with optional parts
+
+**Decision:** a certification or a language is one line: `Name | detail | date`. The detail and date are optional. Achievements, which need a paragraph each, are a list of items like experience.
+
+| Option | Verdict |
+|---|---|
+| Turn both into lists of objects | Needs a migration for every saved CV and every exported file, and a larger form for what is usually one short line |
+| **One line with optional parts** (chosen) | Every existing CV keeps working unchanged (a line without `|` is just a name); the form stays a small text box; templates that have room show the parts separately |
+
+Language level dots are computed from the wording of the detail when the page is drawn. Storing a number as well would let the two disagree.
+
+**Cost:** `|` cannot be used inside a name, and a level only gets dots if it uses a common word (Native, Fluent, Professional, Intermediate, Elementary, or A1 to C2).
+
+## 13. Photo stored in the document, shrunk on upload
 
 **Decision:** an uploaded image is cropped to a centred square, drawn to a 320 px canvas and saved as a JPEG data URL inside the document.
 
@@ -139,6 +152,6 @@ Spacing and margins are steps (1 to 7 and 1 to 6), not free numbers. A step is v
 
 **Cost:** no manual crop; the centre square is used.
 
-## 13. Container hardening
+## 14. Container hardening
 
 nginx runs from the unprivileged image as uid 101 on a read-only filesystem with all capabilities dropped. The server only reads files, so it is given the ability to do nothing else. A Content-Security-Policy limits scripts to the site itself and cdnjs. The browser tests run against the container in CI specifically to prove the policy does not break PDF export or import.

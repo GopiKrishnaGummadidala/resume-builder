@@ -180,7 +180,7 @@ const pageStyle = html => html.match(/<div class="page [^"]*" style="([^"]*)"/)[
 
 describe('templates list', () => {
   test('every template has a known layout, header and skills style', () => {
-    assert.equal(TEMPLATES.length, 13);
+    assert.equal(TEMPLATES.length, 14);
     assert.equal(new Set(TEMPLATES.map(t => t.id)).size, TEMPLATES.length);
     for (const t of TEMPLATES) {
       assert.ok(['single', 'side-left', 'side-right', 'profile'].includes(t.layout), t.id);
@@ -193,7 +193,7 @@ describe('templates list', () => {
   test('every template shows every part of a full CV exactly once', () => {
     for (const t of TEMPLATES) {
       const html = renderResume(sampleResume(t.id));
-      for (const text of ['Jordan Rivera', 'Brightline Analytics', 'B.A. Interaction Design', 'Figma', 'Open-source icon set', 'Nielsen Norman UX Certification', 'Spanish']) {
+      for (const text of ['Jordan Rivera', 'Brightline Analytics', 'B.A. Interaction Design', 'Figma', 'Open-source icon set', 'Nielsen Norman UX Certification', 'Spanish', 'Analytics platform for mid-size retailers', 'Design system adoption', 'Letterpress printing']) {
         assert.equal(html.split(text).length - 1, 1, `${t.id}: "${text}"`);
       }
       assert.ok(html.includes('Product designer with 7 years'), `${t.id}: summary`);
@@ -245,5 +245,64 @@ describe('photo on the page', () => {
         assert.equal(renderResume(doc).includes('<img'), false, `${t.id}: ${photo}`);
       }
     }
+  });
+});
+
+describe('richer CV content', () => {
+  test('bullets and achievements allow **bold** and nothing else', () => {
+    const r = sampleResume();
+    r.experience[0].bullets = 'Grew revenue **by 40%** <b>x</b>';
+    r.achievements[0].description = 'Saved **3 days** a week <i>y</i>';
+    const html = renderResume(r);
+    assert.ok(html.includes('Grew revenue <strong>by 40%</strong> &lt;b&gt;x&lt;/b&gt;'));
+    assert.ok(html.includes('Saved <strong>3 days</strong> a week &lt;i&gt;y&lt;/i&gt;'));
+  });
+
+  test('no new field can inject markup, in any template', () => {
+    for (const t of TEMPLATES) {
+      const r = sampleResume(t.id);
+      r.interests = XSS;
+      r.certifications = r.languages = `${XSS} | ${XSS} | ${XSS}`;
+      r.experience[0].about = XSS;
+      r.achievements = [{ id: 'aaaa1111', title: XSS, date: XSS, description: XSS }];
+      const html = renderResume(r);
+      assert.equal(html.includes('<img'), false, t.id);
+      assert.equal(/onerror=alert\(1\)>/.test(html), false, t.id);
+    }
+  });
+
+  test('entries written the old way, separated by commas, still show', () => {
+    for (const t of TEMPLATES) {
+      const r = sampleResume(t.id);
+      r.certifications = 'Scrum Master (2021), AWS Practitioner';
+      r.languages = 'English (native), Spanish';
+      const html = renderResume(r);
+      for (const text of ['Scrum Master (2021)', 'AWS Practitioner', 'English (native)', 'Spanish']) assert.ok(html.includes(text), `${t.id}: ${text}`);
+    }
+  });
+
+  test('empty achievements and interests draw no section', () => {
+    for (const t of TEMPLATES) {
+      const r = sampleResume(t.id);
+      r.achievements = [{ id: 'aaaa1111', title: '', date: '2020', description: '' }];
+      r.interests = ' , ';
+      const html = renderResume(r);
+      assert.equal(html.includes('data-sec="achievements"'), false, t.id);
+      assert.equal(html.includes('data-sec="interests"'), false, t.id);
+    }
+  });
+
+  test('Signature puts education, certificates and language levels in the right column', () => {
+    const html = renderResume(sampleResume('signature'));
+    const side = html.slice(html.indexOf('<aside class="r-side">'));
+    for (const sec of ['skills', 'certifications', 'languages', 'education', 'achievements', 'interests']) assert.ok(side.includes(`data-sec="${sec}"`), sec);
+    assert.equal(side.includes('data-sec="experience"'), false);
+    assert.ok(side.includes('<span class="r-e-t">Nielsen Norman UX Certification</span><span class="r-e-s">NN/g</span><span class="r-e-d">2022</span>'));
+    assert.ok(side.includes('aria-label="Level 5 of 5"'), 'English | Native');
+    assert.ok(side.includes('aria-label="Level 3 of 5"'), 'Spanish | Professional working');
+    assert.equal((side.match(/class="on"/g) || []).length, 8);
+    // Profile keeps education in the main column.
+    const profile = renderResume(sampleResume('profile'));
+    assert.ok(profile.indexOf('data-sec="education"') < profile.indexOf('<aside class="r-side">'));
   });
 });

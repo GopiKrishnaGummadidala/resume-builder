@@ -38,7 +38,7 @@ test.describe('navigation', () => {
   test('every view opens from the header', async ({ page }) => {
     const nav = page.locator('.nav');
     await nav.getByRole('link', { name: 'Templates' }).click();
-    await expect(page.locator('.tpl-card')).toHaveCount(13);
+    await expect(page.locator('.tpl-card')).toHaveCount(14);
     await nav.getByRole('link', { name: 'ATS Checker' }).click();
     await expect(page.getByRole('heading', { name: 'ATS Resume Checker' })).toBeVisible();
     await nav.getByRole('link', { name: 'Job Matcher' }).click();
@@ -50,11 +50,11 @@ test.describe('navigation', () => {
   test('template filters narrow the list', async ({ page }) => {
     await page.goto('/#templates');
     await page.locator('[data-filter="two-col"]').click();
-    await expect(page.locator('.tpl-card')).toHaveCount(4);
+    await expect(page.locator('.tpl-card')).toHaveCount(5);
     await page.locator('[data-filter="photo"]').click();
-    await expect(page.locator('.tpl-card')).toHaveCount(3);
+    await expect(page.locator('.tpl-card')).toHaveCount(4);
     await page.locator('[data-filter="all"]').click();
-    await expect(page.locator('.tpl-card')).toHaveCount(13);
+    await expect(page.locator('.tpl-card')).toHaveCount(14);
   });
 
   test('an unknown document id shows a not-found message', async ({ page }) => {
@@ -474,7 +474,7 @@ test.describe('layout, fonts and themes', () => {
 
   test('each new template opens in the editor without errors', async ({ page }) => {
     await newCv(page);
-    for (const id of ['profile', 'timeline', 'elegant', 'bold', 'corporate', 'studio']) {
+    for (const id of ['profile', 'signature', 'timeline', 'elegant', 'bold', 'corporate', 'studio']) {
       await page.locator('[data-role="template"]').selectOption(id);
       await expect(live(page).locator(`.tpl-${id}`)).toContainText('Brightline Analytics');
     }
@@ -535,5 +535,36 @@ test.describe('photo', () => {
     await page.locator('[data-role="photo"]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
     await expect(page.locator('.toast')).toContainText('Choose a JPG, PNG or WebP image.');
     await expect(live(page).locator('img.r-photo')).toHaveCount(0);
+  });
+});
+
+test.describe('achievements, interests and entries with detail', () => {
+  test('they are edited in the form, shown by the Signature template and saved', async ({ page }) => {
+    await newCv(page);
+    await page.locator('[data-role="template"]').selectOption('signature');
+    await page.locator('details[data-group="achievements"]').evaluate(d => { d.open = true; });
+    await page.getByRole('button', { name: '+ Add achievement' }).click();
+    await field(page, 'achievements.1.title').fill('Load time');
+    await field(page, 'achievements.1.date').fill('Jul 2023');
+    await field(page, 'achievements.1.description').fill('Cut load time **by 40%** <script>window.__x=1</script>');
+    await field(page, 'experience.0.about').fill('Shipping software · 120+ clients');
+    await page.locator('details[data-group="extra"]').evaluate(d => { d.open = true; });
+    await field(page, 'languages').fill('English | Fluent\nGerman | Elementary');
+    await field(page, 'certifications').fill('Solutions Associate | Microsoft | Feb 2019');
+
+    const side = live(page).locator('.r-side');
+    await expect(side.locator('[data-sec="achievements"]')).toContainText('Load time');
+    await expect(side.locator('[data-sec="achievements"] strong', { hasText: 'by 40%' })).toBeVisible();
+    await expect(side.locator('[data-sec="languages"] .r-level')).toHaveCount(2);
+    await expect(side.locator('[data-sec="languages"] .r-level i.on')).toHaveCount(5); // 4 + 1
+    await expect(side.locator('[data-sec="certifications"]')).toContainText('Microsoft');
+    await expect(live(page).locator('.r-about').first()).toHaveText('Shipping software · 120+ clients');
+    expect(await page.evaluate(() => window.__x)).toBeUndefined();
+
+    await page.reload();
+    await expect(live(page).locator('[data-sec="achievements"]')).toContainText('Jul 2023');
+    await page.locator('[data-role="template"]').selectOption('classic'); // content survives a template switch
+    await expect(live(page).locator('[data-sec="achievements"]')).toContainText('Load time');
+    await expect(live(page).locator('[data-sec="languages"]')).toContainText('German – Elementary');
   });
 });

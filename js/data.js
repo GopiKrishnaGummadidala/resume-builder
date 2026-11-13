@@ -17,7 +17,7 @@ export const FONTS = [
 
 /** Template ids the model accepts. templates.js renders exactly these (enforced by a unit test). */
 export const TEMPLATE_IDS = [
-  'banner', 'profile', 'classic', 'minimal', 'executive', 'tech', 'timeline', 'elegant', 'bold', 'corporate',
+  'banner', 'profile', 'signature', 'classic', 'minimal', 'executive', 'tech', 'timeline', 'elegant', 'bold', 'corporate',
   'modern', 'studio', 'compact',
 ];
 export const DEFAULT_TEMPLATE = 'banner';
@@ -83,6 +83,8 @@ export function blankResume(templateId = DEFAULT_TEMPLATE) {
     projects: [],
     certifications: '',
     languages: '',
+    achievements: [],
+    interests: '',
   };
 }
 
@@ -106,9 +108,10 @@ export function sampleResume(templateId = DEFAULT_TEMPLATE) {
     experience: [
       {
         id: uid(), role: 'Senior Product Designer', company: 'Brightline Analytics', location: 'Austin, TX',
+        about: 'Analytics platform for mid-size retailers · 300 employees',
         start: '2021', end: 'Present',
         bullets: [
-          'Led redesign of onboarding flow, increasing 7-day activation by 23%',
+          'Led redesign of onboarding flow, **increasing 7-day activation by 23%**',
           'Built a component library of 120+ components adopted by 4 product teams',
           'Ran 40+ user interviews per quarter to prioritize the roadmap with PMs',
           'Mentored 3 junior designers through structured critique sessions',
@@ -116,6 +119,7 @@ export function sampleResume(templateId = DEFAULT_TEMPLATE) {
       },
       {
         id: uid(), role: 'Product Designer', company: 'Northwind Labs', location: 'Remote',
+        about: '',
         start: '2018', end: '2021',
         bullets: [
           'Designed self-serve billing that reduced support tickets by 31%',
@@ -131,8 +135,12 @@ export function sampleResume(templateId = DEFAULT_TEMPLATE) {
     projects: [
       { id: uid(), name: 'Open-source icon set', link: 'github.com/jrivera/icons', description: '300+ icons used by 2k+ developers' },
     ],
-    certifications: 'Nielsen Norman UX Certification (2022)',
-    languages: 'English (native), Spanish (professional)',
+    certifications: 'Nielsen Norman UX Certification | NN/g | 2022',
+    languages: 'English | Native\nSpanish | Professional working',
+    achievements: [
+      { id: uid(), title: 'Design system adoption', date: '2023', description: 'Brought four product teams onto one component library, cutting UI defects by a third.' },
+    ],
+    interests: 'Trail running, Letterpress printing',
   };
 }
 
@@ -222,7 +230,8 @@ export function resumeToText(r) {
     lines.push('', 'EXPERIENCE');
     r.experience.forEach(e => {
       lines.push(`${e.role} — ${e.company} (${e.start} – ${e.end})`);
-      splitLines(e.bullets).forEach(b => lines.push(`• ${b}`));
+      if (e.about) lines.push(e.about);
+      splitLines(e.bullets).forEach(b => lines.push(`• ${b.replace(/\*\*/g, '')}`));
     });
   }
   if (r.education.length) {
@@ -236,11 +245,36 @@ export function resumeToText(r) {
   }
   if (r.certifications) lines.push('', 'CERTIFICATIONS', r.certifications);
   if (r.languages) lines.push('', 'LANGUAGES', r.languages);
+  if (r.achievements?.length) {
+    lines.push('', 'ACHIEVEMENTS');
+    r.achievements.forEach(a => lines.push(`${a.title}${a.date ? ` (${a.date})` : ''} — ${a.description || ''}`));
+  }
+  if (r.interests) lines.push('', 'INTERESTS', r.interests);
   return lines.join('\n');
 }
 
 export const splitLines = s => (s || '').split('\n').map(x => x.trim().replace(/^[-•*]\s*/, '')).filter(Boolean);
 export const splitList = s => (s || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean);
+
+/**
+ * A certification or language can carry a detail and a date, separated by "|":
+ * "Solutions Associate | Microsoft | Feb 2019" or "German | Elementary".
+ * @returns {{title: string, detail: string, date: string}}
+ */
+export function entryParts(line) {
+  const [title = '', detail = '', ...rest] = String(line ?? '').split('|').map(x => x.trim());
+  return { title, detail, date: rest.filter(Boolean).join(' · ') };
+}
+
+const LEVELS = [
+  [5, /\b(native|mother tongue|bilingual|c2)\b/i],
+  [4, /\b(full professional|fluent|advanced|c1)\b/i],
+  [3, /\b(professional|upper[- ]intermediate|b2)\b/i],
+  [2, /\b(limited|intermediate|conversational|b1)\b/i],
+  [1, /\b(elementary|basic|beginner|a1|a2)\b/i],
+];
+/** Language level from 1 to 5 read from a proficiency description, or 0 when it names none. */
+export const languageLevel = detail => (LEVELS.find(([, re]) => re.test(String(detail ?? ''))) || [0])[0];
 
 // ---------- validation ----------
 // Everything that enters the app from outside (localStorage, an imported JSON file) passes through
@@ -297,11 +331,13 @@ export function normalizeDoc(raw) {
   return {
     ...base,
     summary: str(raw.summary, LIMITS.long),
-    experience: list(raw.experience, ['role', 'company', 'location', 'start', 'end'], ['bullets']),
+    experience: list(raw.experience, ['role', 'company', 'location', 'about', 'start', 'end'], ['bullets']),
     education: list(raw.education, ['degree', 'school', 'location', 'start', 'end'], ['details']),
     skills: str(raw.skills, LIMITS.long),
     projects: list(raw.projects, ['name', 'link'], ['description']),
     certifications: str(raw.certifications, LIMITS.long),
     languages: str(raw.languages, LIMITS.long),
+    achievements: list(raw.achievements, ['title', 'date'], ['description']),
+    interests: str(raw.interests, LIMITS.long),
   };
 }

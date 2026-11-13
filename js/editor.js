@@ -73,10 +73,11 @@ function resumeForm(r) {
   const exp = r.experience.map((e, i) => listItem(r, 'experience', i, e.role || e.company || `Position ${i + 1}`, `
       ${field('Job title', `experience.${i}.role`, r)}
       ${field('Company', `experience.${i}.company`, r)}
+      ${field('About the company (optional)', `experience.${i}.about`, r, { full: true, ph: 'What it does, its size or market, in one line' })}
       ${field('Start', `experience.${i}.start`, r, { ph: '2021' })}
       ${field('End', `experience.${i}.end`, r, { ph: 'Present' })}
       ${field('Location', `experience.${i}.location`, r, { full: true })}
-      ${field('Achievements (one per line)', `experience.${i}.bullets`, r, { textarea: true, rows: 5, full: true, ph: 'Led redesign of onboarding, increasing activation by 23%', hint: '3–6 bullets. Start with an action verb and add a number where you can.' })}
+      ${field('Achievements (one per line)', `experience.${i}.bullets`, r, { textarea: true, rows: 5, full: true, ph: 'Led redesign of onboarding, increasing activation by 23%', hint: '3–6 bullets. Start with an action verb and add a number where you can. **text** is bold.' })}
       <div class="full"><button class="btn btn-sm btn-ghost" data-act="strengthen" data-i="${i}">✨ Strengthen bullets</button></div>`)).join('');
   const edu = r.education.map((e, i) => listItem(r, 'education', i, e.degree || e.school || `Education ${i + 1}`, `
       ${field('Degree', `education.${i}.degree`, r)}
@@ -89,6 +90,10 @@ function resumeForm(r) {
       ${field('Name', `projects.${i}.name`, r)}
       ${field('Link', `projects.${i}.link`, r)}
       ${field('Description', `projects.${i}.description`, r, { full: true })}`)).join('');
+  const ach = r.achievements.map((a, i) => listItem(r, 'achievements', i, a.title || `Achievement ${i + 1}`, `
+      ${field('Title', `achievements.${i}.title`, r)}
+      ${field('Date', `achievements.${i}.date`, r, { ph: 'Mar 2023' })}
+      ${field('What you did and the result', `achievements.${i}.description`, r, { textarea: true, rows: 3, full: true })}`)).join('');
   return [
     group('Personal details', 'personal', personalFields(r)),
     group('Professional summary', 'summary', field('Summary', 'summary', r, { textarea: true, rows: 4, full: true, ph: '2–4 sentences: who you are, your strongest results, what you want next.' })),
@@ -97,8 +102,10 @@ function resumeForm(r) {
     group('Skills', 'skills', field('Skills (comma separated)', 'skills', r, { textarea: true, rows: 3, full: true, ph: 'Figma, SQL, Stakeholder management…' })),
     group('Projects', 'projects', `${proj}<button class="btn btn-dashed" data-act="add-item" data-list="projects">+ Add project</button>`, r.projects.length > 0),
     group('Certifications & languages', 'extra', `<div class="grid2">
-      ${field('Certifications (comma separated)', 'certifications', r, { textarea: true, rows: 2, full: true })}
-      ${field('Languages (comma separated)', 'languages', r, { textarea: true, rows: 2, full: true })}</div>`, !!(r.certifications || r.languages)),
+      ${field('Certifications (one per line)', 'certifications', r, { textarea: true, rows: 3, full: true, ph: 'Solutions Associate | Microsoft | Feb 2019', hint: 'Name | issuer | date. The issuer and date are optional.' })}
+      ${field('Languages (one per line)', 'languages', r, { textarea: true, rows: 2, full: true, ph: 'German | Elementary', hint: 'Language | level, for example Native, Fluent, Professional, Intermediate, Elementary.' })}</div>`, !!(r.certifications || r.languages)),
+    group('Achievements', 'achievements', `${ach}<button class="btn btn-dashed" data-act="add-item" data-list="achievements">+ Add achievement</button>`, r.achievements.length > 0),
+    group('Interests', 'interests', field('Interests (comma separated)', 'interests', r, { full: true, ph: 'Trail running, Open-source' }), !!r.interests),
   ].join('');
 }
 
@@ -439,7 +446,8 @@ export function mountEditor() {
     } else if (act === 'add-item') {
       const list = b.dataset.list;
       const blank = {
-        experience: { role: '', company: '', location: '', start: '', end: '', bullets: '' },
+        experience: { role: '', company: '', location: '', about: '', start: '', end: '', bullets: '' },
+        achievements: { title: '', date: '', description: '' },
         education: { degree: '', school: '', location: '', start: '', end: '', details: '' },
         projects: { name: '', link: '', description: '' },
       }[list];

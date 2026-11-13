@@ -1,5 +1,5 @@
 // Document templates. Each template renders a CV and a matching cover letter into an A4 ".page".
-import { FONTS, splitLines, splitList, pageSize, pageScale, validPhoto } from './data.js';
+import { FONTS, splitLines, splitList, pageSize, pageScale, validPhoto, entryParts, languageLevel } from './data.js';
 
 /** A4 page size in CSS pixels at 96 dpi (the default; see pageSize() for a document's own size). */
 export const PAGE = Object.freeze({ W: 794, H: 1123 });
@@ -11,10 +11,12 @@ export const PAGE = Object.freeze({ W: 794, H: 1123 });
  *   side-right header on top, narrow column on the right
  *   profile    card header with the summary in it, shaded column on the right
  * header: which header is drawn. skills: how skills are shown in the main column.
+ * sideEducation (profile layout): education goes in the right column instead of the main one.
  */
 export const TEMPLATES = [
   { id: 'banner', name: 'Banner', layout: 'single', header: 'banner', skills: 'inline', tags: ['ats', 'single'], desc: 'Two-tone header band with an icon contact row. Letters get bold section sub-headings.' },
   { id: 'profile', name: 'Profile', layout: 'profile', header: 'banner', skills: 'chips', tags: ['two-col', 'photo'], desc: 'Header card with your photo and summary, experience on the left, skill chips on the right.' },
+  { id: 'signature', name: 'Signature', layout: 'profile', header: 'banner', skills: 'chips', sideEducation: true, tags: ['two-col', 'photo'], desc: 'The full picture: header card, career line with company notes, and cards for skills, certificates, language levels, achievements and interests.' },
   { id: 'classic', name: 'Classic', layout: 'single', header: 'plain', skills: 'inline', tags: ['ats', 'single'], desc: 'Centered header, single column. Safest choice for applicant tracking systems.' },
   { id: 'minimal', name: 'Minimal', layout: 'single', header: 'plain', skills: 'inline', tags: ['ats', 'single'], desc: 'Quiet, left-aligned layout with hairline rules. Great for conservative industries.' },
   { id: 'executive', name: 'Executive', layout: 'single', header: 'plain', skills: 'inline', tags: ['ats', 'single'], desc: 'Bold color header band for senior and leadership roles.' },
@@ -124,6 +126,8 @@ const SECTION_ICONS = {
   Languages: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   Certifications: '<circle cx="12" cy="9" r="6"/><path d="m8.5 14-1.5 7 5-3 5 3-1.5-7"/>',
   Contact: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  Achievements: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8"/>',
+  Interests: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
 };
 
 function section(title, inner) {
@@ -143,7 +147,8 @@ function experienceHtml(r) {
       return `<div class="r-item">
         <div class="r-row"><strong>${esc(e.role) || 'Role'}</strong><span class="r-date">${dates(e.start, e.end)}</span></div>
         <div class="r-row r-sub"><span>${esc(e.company)}</span><span>${esc(e.location)}</span></div>
-        ${bullets.length ? `<ul>${bullets.map(b => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}
+        ${e.about ? `<p class="r-about">${esc(e.about)}</p>` : ''}
+        ${bullets.length ? `<ul>${bullets.map(b => `<li>${inline(b)}</li>`).join('')}</ul>` : ''}
       </div>`;
     })
     .join('');
@@ -177,6 +182,31 @@ const skillsChips = r => (splitList(r.skills).length ? `<div class="r-chips">${s
 const skillsList = r => (splitList(r.skills).length ? `<ul class="r-plain">${splitList(r.skills).map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '');
 const textBlock = t => (t ? `<p class="r-p">${esc(t)}</p>` : '');
 const listBlock = t => (splitList(t).length ? `<ul class="r-plain">${splitList(t).map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '');
+
+/** Five dots for a language level (1-5); drawn only by templates that style .r-level. */
+const levelDots = level => (level
+  ? `<span class="r-level" role="img" aria-label="Level ${level} of 5">${[1, 2, 3, 4, 5].map(i => `<i${i <= level ? ' class="on"' : ''}></i>`).join('')}</span>`
+  : '');
+/** Certifications or languages, one per line, each "Title | Detail | Date" (see entryParts). */
+function entriesInline(text) {
+  const items = splitList(text).map(entryParts).filter(e => e.title);
+  return items.length ? `<p class="r-p">${items.map(e => esc([e.title, e.detail, e.date].filter(Boolean).join(' – '))).join(' · ')}</p>` : '';
+}
+function entriesList(text, { levels = false } = {}) {
+  const items = splitList(text).map(entryParts).filter(e => e.title);
+  if (!items.length) return '';
+  return `<ul class="r-plain r-entries">${items.map(e => `<li><span class="r-e-t">${esc(e.title)}</span>${
+    e.detail ? `<span class="r-e-s">${esc(e.detail)}</span>` : ''}${
+    e.date ? `<span class="r-e-d">${esc(e.date)}</span>` : ''}${levels ? levelDots(languageLevel(e.detail)) : ''}</li>`).join('')}</ul>`;
+}
+
+function achievementsHtml(r) {
+  const items = (r.achievements || []).filter(a => a.title || a.description);
+  return items
+    .map(a => `<div class="r-item"><div class="r-row"><strong>${esc(a.title)}</strong><span class="r-date">${esc(a.date)}</span></div>
+      ${a.description ? `<p class="r-p">${inline(a.description)}</p>` : ''}</div>`)
+    .join('');
+}
 
 /**
  * @param {object} p personal details
@@ -216,16 +246,18 @@ export function renderResume(r) {
   const experience = section('Experience', experienceHtml(r));
   const education = section('Education', educationHtml(r));
   const projects = section('Projects', projectsHtml(r));
+  const achievements = section('Achievements', achievementsHtml(r));
 
   if (t.layout === 'side-left' || t.layout === 'side-right') {
     const contacts = contactItems(r.personal);
     const contactSec = contacts.length ? section('Contact', `<ul class="r-plain">${contacts.map(c => `<li>${c}</li>`).join('')}</ul>`) : '';
     const sideRest = [
       section('Skills', skillsList(r)),
-      section('Languages', listBlock(r.languages)),
-      section('Certifications', listBlock(r.certifications)),
+      section('Languages', entriesList(r.languages)),
+      section('Certifications', entriesList(r.certifications)),
+      section('Interests', listBlock(r.interests)),
     ].join('');
-    const main = `<main class="r-main">${summary}${experience}${education}${projects}</main>`;
+    const main = `<main class="r-main">${summary}${experience}${education}${projects}${achievements}</main>`;
     if (t.layout === 'side-left') {
       return pageWrap(r, `<div class="r-cols"><aside class="r-side">${header(r.personal, 'sidebar')}${contactSec}${sideRest}</aside>${main}</div>`);
     }
@@ -235,14 +267,23 @@ export function renderResume(r) {
   if (t.layout === 'profile') {
     const side = [
       section('Skills', skillsChips(r)),
-      section('Languages', listBlock(r.languages)),
-      section('Certifications', listBlock(r.certifications)),
+      section('Certifications', entriesList(r.certifications)),
+      section('Languages', entriesList(r.languages, { levels: true })),
+      t.sideEducation ? education : '',
+      achievements,
+      section('Interests', listBlock(r.interests)),
     ].join('');
-    return pageWrap(r, `${header(r.personal, 'banner', r.summary)}<div class="b-body p-cols"><main class="r-main">${experience}${education}${projects}</main>${side ? `<aside class="r-side">${side}</aside>` : ''}</div>`);
+    const main = `${experience}${t.sideEducation ? '' : education}${projects}`;
+    return pageWrap(r, `${header(r.personal, 'banner', r.summary)}<div class="b-body p-cols"><main class="r-main">${main}</main>${side ? `<aside class="r-side">${side}</aside>` : ''}</div>`);
   }
 
   const skills = section('Skills', t.skills === 'chips' ? skillsChips(r) : skillsInline(r));
-  const extras = [section('Certifications', listBlock(r.certifications)), section('Languages', textBlock(r.languages))];
+  const extras = [
+    section('Certifications', entriesInline(r.certifications)),
+    section('Languages', entriesInline(r.languages)),
+    achievements,
+    section('Interests', textBlock(splitList(r.interests).join(' · '))),
+  ];
   const order = t.skillsFirst
     ? [summary, skills, experience, projects, education, ...extras]
     : [summary, experience, education, skills, projects, ...extras];
