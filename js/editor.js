@@ -1,14 +1,19 @@
 // The document editor: form on the left, live A4 preview in the middle, coach on the right.
 // The form and the preview both edit the same in-memory document; every change is saved through the store.
-import { draftLetterBody, THEME_COLORS, FONTS, uid, splitLines, DEFAULT_PERSONAL, LETTER_TITLE, letterTitle } from './data.js';
+import {
+  draftLetterBody, THEME_COLORS, FONTS, uid, splitLines, DEFAULT_PERSONAL, LETTER_TITLE, letterTitle,
+  PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, validPhoto,
+} from './data.js';
 import { store } from './store.js';
-import { TEMPLATES, renderDoc, esc, letterBlocks, PAGE } from './templates.js';
+import { TEMPLATES, renderDoc, esc, letterBlocks } from './templates.js';
 import { coachResume, coachLetter, strengthenBullet } from './analysis.js';
 import { htmlToLetterText, editableToLetterText, toggleBold, toggleHeading, editableBold, editableHeading } from './richtext.js';
 import { $, $$, toast, confirmDialog, fileNameDialog, setPath, getPath } from './ui.js';
 import { saveFile } from './platform.js';
 import { buildPdf, pdfName } from './pdf-export.js';
 import { fitPages, pageObserver } from './preview.js';
+import { createHistory } from './history.js';
+import { fileToPhoto } from './photo.js';
 
 function field(label, path, doc, opts = {}) {
   const v = getPath(doc, path) ?? '';
@@ -43,7 +48,16 @@ function personalFields(doc) {
   const reset = hasDefaults()
     ? `<div><button class="btn btn-sm btn-ghost" data-act="reset-personal" title="Fill name, phone, email and links with your saved defaults">↺ Reset to my details</button></div>`
     : '';
-  return `${reset}<div class="grid2">
+  const photo = validPhoto(doc.personal.photo);
+  return `${reset}<div class="photo-row">
+      ${photo ? `<img class="photo-thumb" src="${esc(photo)}" alt="Your photo">` : '<span class="photo-thumb photo-empty" aria-hidden="true">☺</span>'}
+      <div>
+        <label class="btn btn-sm btn-ghost photo-pick">${photo ? 'Change photo' : 'Add photo'}<input type="file" accept="image/jpeg,image/png,image/webp" data-role="photo" class="visually-hidden"></label>
+        ${photo ? '<button type="button" class="btn btn-sm btn-ghost" data-act="remove-photo">Remove</button>' : ''}
+        <p class="muted small">Optional. Shown in the header; cropped to a square and stored only in this browser.</p>
+      </div>
+    </div>
+    <div class="grid2">
     ${field('Full name', 'personal.name', doc, { ph: 'Jordan Rivera' })}
     ${field('Headline / job title', 'personal.title', doc, { ph: 'Senior Product Designer' })}
     ${field('Email', 'personal.email', doc, { type: 'email', ph: 'you@example.com' })}
@@ -134,6 +148,34 @@ function coachPanel(doc) {
     <ul class="checks">${todo.map(c => `<li class="todo">${esc(c.text)}</li>`).join('')}${done.map(c => `<li class="done">${esc(c.text.replace(/ — .*$/, ''))}</li>`).join('')}</ul>`;
 }
 
+/** Layout, Fonts and Themes menus. Each is a <details> so it opens and closes without script. */
+function toolbarMenus(doc) {
+  const range = (role, label, steps, value) => `<label class="tb-range"><span>${label}</span>
+      <input type="range" data-role="${role}" min="1" max="${steps.length}" step="1" value="${value}" aria-label="${label}">
+      <span class="tb-ends muted small"><span>Min</span><span>Max</span></span></label>`;
+  return `<details class="tb-menu" data-menu="layout"><summary class="btn btn-sm btn-ghost">Layout</summary>
+      <div class="tb-pop">
+        ${range('spacing', 'Content spacing', SPACING_STEPS, doc.theme.spacing ?? DEFAULT_SPACING)}
+        ${range('margin', 'Page margins', MARGIN_STEPS, doc.theme.margin ?? DEFAULT_MARGIN)}
+        <fieldset class="tb-size"><legend>Page size</legend>
+          ${Object.entries(PAGE_SIZES).map(([id, s]) => `<label><input type="radio" name="page-size" data-role="size" value="${id}" ${pageSize(doc) === s ? 'checked' : ''}> ${s.label}</label>`).join('')}
+        </fieldset>
+        <button type="button" class="btn btn-sm btn-ghost" data-act="layout-reset">Reset layout</button>
+      </div>
+    </details>
+    <details class="tb-menu" data-menu="fonts"><summary class="btn btn-sm btn-ghost">Fonts</summary>
+      <div class="tb-pop tb-list">
+        ${FONTS.map(f => `<button type="button" class="tb-option ${f.id === doc.theme.font ? 'active' : ''}" data-act="font" data-font="${f.id}" style="font-family:${esc(f.css)}">${esc(f.label)}</button>`).join('')}
+      </div>
+    </details>
+    <details class="tb-menu" data-menu="themes"><summary class="btn btn-sm btn-ghost">Themes</summary>
+      <div class="tb-pop">
+        <div class="swatches">${THEME_COLORS.map(c => `<button class="swatch ${c === doc.theme.color ? 'active' : ''}" style="--c:${c}" data-act="color" data-color="${c}" aria-label="Colour ${c}"></button>`).join('')}</div>
+        <label class="tb-custom"><span>Custom colour</span><input type="color" data-role="color" value="${esc(doc.theme.color)}" aria-label="Custom colour"></label>
+      </div>
+    </details>`;
+}
+
 export function editorPage(id) {
   const doc = store.get(id);
   if (!doc) return `<section class="section"><h1>Document not found</h1><a class="btn btn-primary" href="#documents">Back to my documents</a></section>`;
@@ -143,9 +185,10 @@ export function editorPage(id) {
       <a class="btn btn-sm btn-ghost" href="#documents">← Documents</a>
       <input class="title-input" data-path="title" value="${esc(doc.title)}" aria-label="Document name">
       <div class="tb-group">
+        <button class="icon-btn" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
+        <button class="icon-btn" data-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo" disabled>↷</button>
         <select data-role="template" aria-label="Template">${TEMPLATES.map(t => `<option value="${t.id}" ${t.id === doc.templateId ? 'selected' : ''}>${t.name}</option>`).join('')}</select>
-        <select data-role="font" aria-label="Font">${FONTS.map(f => `<option value="${f.id}" ${f.id === doc.theme.font ? 'selected' : ''}>${f.label}</option>`).join('')}</select>
-        <div class="swatches">${THEME_COLORS.map(c => `<button class="swatch ${c === doc.theme.color ? 'active' : ''}" style="--c:${c}" data-act="color" data-color="${c}" aria-label="Colour ${c}"></button>`).join('')}</div>
+        ${toolbarMenus(doc)}
       </div>
       <div class="tb-group">
         <button class="btn btn-sm btn-ghost" data-act="export-json">Export JSON</button>
@@ -176,21 +219,77 @@ export function mountEditor() {
   const updateAround = () => {
     fitPages(root);
     const page = $('.page', live);
-    $('.overflow-warn', root).hidden = page.scrollHeight <= PAGE.H + 2;
+    $('.overflow-warn', root).hidden = page.scrollHeight <= pageSize(doc).H + 2;
     $('#coach').innerHTML = coachPanel(doc);
   };
   const refresh = () => {
     live.innerHTML = renderDoc(doc, { editable: true });
     updateAround();
   };
-  const save = () => store.touch(doc); // debounced write; flushed when the page is hidden
+  // Undo history. A snapshot is the whole document except its save time. Typing is recorded after a
+  // short pause so one undo step is a phrase, not a keystroke; other changes are recorded at once.
+  const snapshot = () => JSON.stringify({ ...doc, updatedAt: 0 });
+  const history = createHistory(snapshot());
+  let recordTimer;
+  const syncHistoryButtons = () => {
+    $('[data-act="undo"]', root).disabled = !history.canUndo;
+    $('[data-act="redo"]', root).disabled = !history.canRedo;
+  };
+  const recordNow = () => { clearTimeout(recordTimer); history.record(snapshot()); syncHistoryButtons(); };
+  const recordSoon = () => { clearTimeout(recordTimer); recordTimer = setTimeout(recordNow, 500); };
+
+  const save = () => { store.touch(doc); recordSoon(); }; // debounced write; flushed when the page is hidden
+  const commit = () => { store.update(doc); recordNow(); }; // write now
   const rerenderForm = () => {
     const open = new Set($$('.group[open]', root).map(g => g.dataset.group));
     $('.ed-form', root).innerHTML = doc.type === 'cover' ? letterForm(doc) : resumeForm(doc);
     $$('.group', root).forEach(g => (g.open = open.has(g.dataset.group)));
     refresh();
-    store.update(doc);
+    commit();
   };
+  /** Make the toolbar controls show the document's current settings (after undo, redo or a reset). */
+  const syncToolbar = () => {
+    $('.title-input', root).value = doc.title;
+    $('[data-role="template"]', root).value = doc.templateId;
+    $('[data-role="spacing"]', root).value = doc.theme.spacing;
+    $('[data-role="margin"]', root).value = doc.theme.margin;
+    $('[data-role="color"]', root).value = doc.theme.color;
+    $$('[data-role="size"]', root).forEach(r => (r.checked = PAGE_SIZES[r.value] === pageSize(doc)));
+    $$('.swatch', root).forEach(s => s.classList.toggle('active', s.dataset.color === doc.theme.color));
+    $$('[data-act="font"]', root).forEach(f => f.classList.toggle('active', f.dataset.font === doc.theme.font));
+  };
+  const restore = snap => {
+    if (!snap) return;
+    Object.assign(doc, JSON.parse(snap), { updatedAt: doc.updatedAt });
+    syncToolbar();
+    rerenderForm();
+  };
+  const undo = () => { recordNow(); restore(history.undo()); };
+  const redo = () => { recordNow(); restore(history.redo()); };
+  root.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.target.closest('input, textarea, select, [contenteditable]')) return; // fields keep their own undo
+    const key = e.key.toLowerCase();
+    if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    else if (key === 'y' || (key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+  });
+
+  // Toolbar menus: only one open at a time; a click elsewhere or Escape closes them.
+  const closeMenus = except => $$('.tb-menu[open]', root).forEach(m => { if (m !== except) m.open = false; });
+  root.addEventListener('toggle', e => { if (e.target.open && e.target.classList?.contains('tb-menu')) closeMenus(e.target); }, true);
+  root.addEventListener('click', e => { if (!e.target.closest('.tb-menu')) closeMenus(); });
+  root.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
+
+  // Layout sliders and the custom colour act while they are dragged.
+  root.addEventListener('input', e => {
+    const role = e.target.dataset.role;
+    if (role === 'spacing' || role === 'margin') doc.theme[role] = Number(e.target.value);
+    else if (role === 'color') {
+      doc.theme.color = e.target.value;
+      $$('.swatch', root).forEach(s => s.classList.toggle('active', s.dataset.color === doc.theme.color));
+    } else return;
+    refresh();
+    save();
+  });
 
   root.addEventListener('input', e => {
     const path = e.target.dataset.path;
@@ -305,19 +404,38 @@ export function mountEditor() {
   root.addEventListener('change', e => {
     const role = e.target.dataset.role;
     if (role === 'template') doc.templateId = e.target.value;
-    else if (role === 'font') doc.theme.font = e.target.value;
+    else if (role === 'size') doc.theme.size = e.target.value;
+    else if (role === 'photo') { setPhoto(e.target.files?.[0]); return; }
     else return;
     refresh();
-    store.update(doc);
+    commit();
   });
+  async function setPhoto(file) {
+    if (!file) return;
+    try {
+      doc.personal.photo = await fileToPhoto(file);
+      rerenderForm();
+      toast('Photo added');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
   root.addEventListener('click', e => {
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const act = b.dataset.act;
-    if (act === 'color') {
-      doc.theme.color = b.dataset.color;
-      $$('.swatch', root).forEach(s => s.classList.toggle('active', s === b));
-      refresh(); store.update(doc);
+    if (act === 'undo') undo();
+    else if (act === 'redo') redo();
+    else if (act === 'color' || act === 'font' || act === 'layout-reset') {
+      if (act === 'color') doc.theme.color = b.dataset.color;
+      else if (act === 'font') doc.theme.font = b.dataset.font;
+      else Object.assign(doc.theme, { spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN, size: 'a4' });
+      syncToolbar();
+      refresh();
+      commit();
+    } else if (act === 'remove-photo') {
+      doc.personal.photo = '';
+      rerenderForm();
     } else if (act === 'add-item') {
       const list = b.dataset.list;
       const blank = {
@@ -355,7 +473,7 @@ export function mountEditor() {
       if (ed && lastEditor === ed) (act === 'fmt-bold' ? editableBold : editableHeading)(ed);
       else if (bodyBox()) (act === 'fmt-bold' ? toggleBold : toggleHeading)(bodyBox());
     } else if (act === 'reset-personal') {
-      doc.personal = { ...DEFAULT_PERSONAL };
+      doc.personal = { ...DEFAULT_PERSONAL, photo: doc.personal.photo || '' };
       rerenderForm();
       toast('Restored your default details');
     } else if (act === 'copy-personal') {
@@ -367,7 +485,7 @@ export function mountEditor() {
       saveFile(`${(doc.title || 'document').replace(/[^\w-]+/g, '_')}.json`, JSON.stringify(doc, null, 2));
     }
   });
-  if (titleIsAuto() && letterTitle(doc) && doc.title !== letterTitle(doc)) { syncTitle(); save(); }
+  if (titleIsAuto() && letterTitle(doc) && doc.title !== letterTitle(doc)) { syncTitle(); commit(); }
   refresh();
 }
 

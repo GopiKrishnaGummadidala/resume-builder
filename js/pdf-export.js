@@ -8,8 +8,8 @@
 //   4. Lay invisible, word-positioned text over the image so the PDF is selectable, searchable and
 //      readable by applicant tracking systems.
 //   5. Add a clickable area over every link (email, website, LinkedIn, GitHub).
-import { renderDoc, PAGE } from './templates.js';
-import { LETTER_TITLE } from './data.js';
+import { renderDoc } from './templates.js';
+import { LETTER_TITLE, pageSize, validPhoto } from './data.js';
 import { loadLib } from './platform.js';
 
 /** Encoding settings. `colors` is the palette size per page; `scale` is bitmap pixels per CSS pixel. */
@@ -90,20 +90,24 @@ async function encodePage(canvas, opts) {
  * Resolves { blob, pages }. Throws with a readable message when a library cannot be loaded.
  */
 export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
-  const opts = { ...PDF_DEFAULTS, ...overrides };
+  // A photo needs the full 256-colour palette; 48 colours would show bands in skin tones.
+  const photo = validPhoto(doc.personal?.photo) ? { colors: 256 } : {};
+  const opts = { ...PDF_DEFAULTS, ...photo, ...overrides };
+  const size = pageSize(doc);
   const html2canvas = await loadLib('html2canvas');
   const { jsPDF } = await loadLib('jspdf');
   area.innerHTML = renderDoc(doc);
+  area.style.width = `${size.W}px`;
   area.classList.add('rendering');
   try {
     await document.fonts.ready;
     const page = area.querySelector('.page');
-    const fullH = Math.max(page.scrollHeight, PAGE.H);
+    const fullH = Math.max(page.scrollHeight, size.H);
     const canvas = await html2canvas(page, {
       scale: opts.scale, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, logging: false,
-      width: PAGE.W, height: fullH, windowWidth: PAGE.W, windowHeight: fullH, // the whole page, not just the visible frame
+      width: size.W, height: fullH, windowWidth: size.W, windowHeight: fullH, // the whole page, not just the visible frame
     });
-    const pdf = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
+    const pdf = new jsPDF({ unit: 'pt', format: size.pdf, compress: true });
     pdf.setProperties({ title, author: doc.personal?.name || '', creator: 'Craftfolio' });
     const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
     const sliceH = Math.floor(canvas.width * (ph / pw)); // bitmap rows per PDF page
@@ -118,8 +122,8 @@ export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
       if (pages) pdf.addPage();
       pdf.addImage(img.data, img.format, 0, 0, pw, part.height * (pw / canvas.width), undefined, 'FAST');
     }
-    addTextLayer(pdf, page, PAGE.W * (ph / pw), pw / PAGE.W);
-    addLinks(pdf, page, PAGE.W * (ph / pw), pw / PAGE.W);
+    addTextLayer(pdf, page, size.W * (ph / pw), pw / size.W);
+    addLinks(pdf, page, size.W * (ph / pw), pw / size.W);
     return { blob: pdf.output('blob'), pages };
   } finally {
     area.classList.remove('rendering');

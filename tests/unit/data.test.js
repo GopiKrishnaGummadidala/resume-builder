@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeDoc, blankResume, blankLetter, sampleResume, sampleLetter, draftLetterBody, resumeToText,
   formatDate, splitLines, splitList, TEMPLATE_IDS, DEFAULT_TEMPLATE, THEME_COLORS, FONTS, LETTER_TITLE, letterTitle,
+  PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, pageScale, validPhoto, PHOTO_MAX_CHARS,
 } from '../../js/data.js';
 import { TEMPLATES } from '../../js/templates.js';
 
@@ -80,7 +81,7 @@ describe('model', () => {
   });
 
   test('a letter started from a CV copies its details and design', () => {
-    const cv = { ...sampleResume('tech'), theme: { color: '#be123c', font: 'lora' } };
+    const cv = { ...sampleResume('tech'), theme: { color: '#be123c', font: 'lora', spacing: 5, margin: 2, size: 'letter' } };
     const l = blankLetter(undefined, cv);
     assert.equal(l.personal.name, cv.personal.name);
     assert.equal(l.templateId, 'tech');
@@ -135,5 +136,71 @@ describe('letterTitle', () => {
     l.recipient.company = 'Northwind Labs';
     assert.equal(letterTitle(l), 'Cover Letter - Northwind Labs');
     assert.equal(letterTitle({}), '');
+  });
+});
+
+const PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+
+describe('page settings', () => {
+  test('new documents use A4 with the default spacing and margins', () => {
+    for (const doc of [blankResume(), blankLetter()]) {
+      assert.deepEqual({ size: doc.theme.size, spacing: doc.theme.spacing, margin: doc.theme.margin }, { size: 'a4', spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN });
+      assert.equal(pageSize(doc), PAGE_SIZES.a4);
+      assert.deepEqual(pageScale(doc), { spacing: 1, margin: 1 });
+    }
+  });
+
+  test('documents saved before these settings existed get the defaults', () => {
+    const old = { ...sampleResume(), theme: { color: '#2563eb', font: 'inter' } };
+    assert.deepEqual(normalizeDoc(old).theme, { color: '#2563eb', font: 'inter', spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN, size: 'a4' });
+    assert.equal(pageSize(old), PAGE_SIZES.a4);
+    assert.deepEqual(pageScale(old), { spacing: 1, margin: 1 });
+  });
+
+  test('valid settings are kept', () => {
+    const doc = normalizeDoc({ ...sampleResume(), theme: { color: '#2563eb', font: 'inter', spacing: 7, margin: 1, size: 'letter' } });
+    assert.deepEqual(doc.theme, { color: '#2563eb', font: 'inter', spacing: 7, margin: 1, size: 'letter' });
+    assert.deepEqual({ W: pageSize(doc).W, H: pageSize(doc).H }, { W: 816, H: 1056 });
+    assert.deepEqual(pageScale(doc), { spacing: SPACING_STEPS[6], margin: MARGIN_STEPS[0] });
+  });
+
+  test('invalid settings fall back instead of reaching the page', () => {
+    for (const bad of [0, 8, 2.5, '3', -1, null, NaN, { valueOf: () => 3 }, '1;color:red']) {
+      const doc = normalizeDoc({ ...sampleResume(), theme: { spacing: bad, margin: bad, size: bad } });
+      assert.deepEqual({ size: doc.theme.size, spacing: doc.theme.spacing, margin: doc.theme.margin }, { size: 'a4', spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN }, String(bad));
+    }
+    for (const size of ['constructor', '__proto__', 'toString', 'A4']) {
+      assert.equal(normalizeDoc({ ...sampleResume(), theme: { size } }).theme.size, 'a4', size);
+      assert.equal(pageSize({ theme: { size } }), PAGE_SIZES.a4, size);
+    }
+  });
+});
+
+describe('photo', () => {
+  test('an embedded JPEG, PNG or WebP is accepted', () => {
+    for (const type of ['jpeg', 'png', 'webp']) {
+      const photo = `data:image/${type};base64,AAAA`;
+      assert.equal(validPhoto(photo), photo);
+    }
+    assert.equal(normalizeDoc({ ...sampleResume(), personal: { name: 'A', photo: PHOTO } }).personal.photo, PHOTO);
+  });
+
+  test('anything else is dropped', () => {
+    const bad = [
+      'https://example.com/me.jpg', 'javascript:alert(1)', 'data:text/html;base64,AAAA', 'data:image/svg+xml;base64,AAAA',
+      'data:image/jpeg;base64,AA"onerror="alert(1)', 'data:image/jpeg;base64,', 'data:image/jpeg,AAAA', '', null, 42, {}, ['x'],
+      `data:image/jpeg;base64,${'A'.repeat(PHOTO_MAX_CHARS)}`,
+    ];
+    for (const v of bad) {
+      assert.equal(validPhoto(v), '', String(v).slice(0, 40));
+      assert.equal(normalizeDoc({ ...sampleResume(), personal: { name: 'A', photo: v } }).personal.photo, '');
+    }
+  });
+
+  test('new documents have an empty photo, and a letter copies the photo of its CV', () => {
+    assert.equal(blankResume().personal.photo, '');
+    const cv = sampleResume();
+    cv.personal.photo = PHOTO;
+    assert.equal(blankLetter(undefined, cv).personal.photo, PHOTO);
   });
 });

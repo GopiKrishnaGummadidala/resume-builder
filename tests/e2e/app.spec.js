@@ -38,7 +38,7 @@ test.describe('navigation', () => {
   test('every view opens from the header', async ({ page }) => {
     const nav = page.locator('.nav');
     await nav.getByRole('link', { name: 'Templates' }).click();
-    await expect(page.locator('.tpl-card')).toHaveCount(7);
+    await expect(page.locator('.tpl-card')).toHaveCount(13);
     await nav.getByRole('link', { name: 'ATS Checker' }).click();
     await expect(page.getByRole('heading', { name: 'ATS Resume Checker' })).toBeVisible();
     await nav.getByRole('link', { name: 'Job Matcher' }).click();
@@ -50,9 +50,11 @@ test.describe('navigation', () => {
   test('template filters narrow the list', async ({ page }) => {
     await page.goto('/#templates');
     await page.locator('[data-filter="two-col"]').click();
-    await expect(page.locator('.tpl-card')).toHaveCount(2);
+    await expect(page.locator('.tpl-card')).toHaveCount(4);
+    await page.locator('[data-filter="photo"]').click();
+    await expect(page.locator('.tpl-card')).toHaveCount(3);
     await page.locator('[data-filter="all"]').click();
-    await expect(page.locator('.tpl-card')).toHaveCount(7);
+    await expect(page.locator('.tpl-card')).toHaveCount(13);
   });
 
   test('an unknown document id shows a not-found message', async ({ page }) => {
@@ -396,5 +398,142 @@ test.describe('contact links', () => {
     });
     expect(raw).toContain('/URI (https://linkedin.com/in/jordan-rivera)');
     expect(raw).toContain('/URI (https://github.com/jordanr)');
+  });
+});
+
+/** A wide PNG drawn in the page: valid, and not square, so the crop is exercised. */
+const widePng = page => page.evaluate(() => {
+  const c = document.createElement('canvas');
+  c.width = 80; c.height = 40;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 0, 40, 40);
+  ctx.fillStyle = '#2980b9'; ctx.fillRect(40, 0, 40, 40);
+  return c.toDataURL('image/png').split(',')[1];
+}).then(b64 => Buffer.from(b64, 'base64'));
+
+async function newCv(page) {
+  await page.goto('/#documents');
+  await page.locator('[data-act="samples"]').click();
+  await page.locator('.doc-card', { hasText: 'Sample — Product Designer' }).getByRole('link', { name: 'Edit' }).click();
+  await expect(page.locator('.editor')).toBeVisible();
+}
+const pageBox = page => live(page).locator('.page');
+const cssVar = (page, name) => pageBox(page).evaluate((el, n) => getComputedStyle(el).getPropertyValue(n).trim(), name);
+
+test.describe('layout, fonts and themes', () => {
+  test('the Layout menu changes spacing, margins and page size, and saves them', async ({ page }) => {
+    await newCv(page);
+    await expect(pageBox(page)).toHaveCSS('width', '794px');
+    await page.getByText('Layout', { exact: true }).click();
+    await page.getByLabel('Content spacing').fill('6');
+    await page.getByLabel('Page margins').fill('2');
+    await page.getByLabel('US Letter').check();
+    expect(await cssVar(page, '--sp')).toBe('1.7');
+    expect(await cssVar(page, '--mg')).toBe('0.7');
+    await expect(pageBox(page)).toHaveCSS('width', '816px');
+    await expect(pageBox(page)).toHaveCSS('min-height', '1056px');
+
+    await page.reload();
+    await expect(pageBox(page)).toHaveCSS('width', '816px');
+    expect(await cssVar(page, '--sp')).toBe('1.7');
+    await page.getByText('Layout', { exact: true }).click();
+    await expect(page.getByLabel('Content spacing')).toHaveValue('6');
+    await page.getByRole('button', { name: 'Reset layout' }).click();
+    await expect(pageBox(page)).toHaveCSS('width', '794px');
+    await expect(page.getByLabel('Content spacing')).toHaveValue('3');
+    await expect(page.getByLabel('A4')).toBeChecked();
+  });
+
+  test('a US Letter document downloads as a US Letter PDF', async ({ page }) => {
+    await newCv(page);
+    await page.getByText('Layout', { exact: true }).click();
+    await page.getByLabel('US Letter').check();
+    const raw = await page.evaluate(async () => {
+      const { store } = await import('/js/store.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      const { blob } = await buildPdf(store.get(location.hash.replace('#edit-', '')), document.querySelector('#print-area'));
+      return new TextDecoder('latin1').decode(await blob.arrayBuffer());
+    });
+    expect(raw).toMatch(/\/MediaBox \[0 0 612\.? 792\.?\]/);
+  });
+
+  test('Fonts and Themes menus change the page; only one menu is open at a time', async ({ page }) => {
+    await newCv(page);
+    await page.getByText('Fonts', { exact: true }).click();
+    await page.getByRole('button', { name: 'Playfair Display (serif)' }).click();
+    await expect(pageBox(page)).toHaveCSS('font-family', /Playfair Display/);
+    await page.getByText('Themes', { exact: true }).click();
+    await expect(page.locator('[data-menu="fonts"]')).not.toHaveAttribute('open', '');
+    await page.getByLabel('Custom colour').fill('#aa3366');
+    expect(await cssVar(page, '--accent')).toBe('#aa3366');
+    await page.locator('.swatch[data-color="#2563eb"]').click();
+    expect(await cssVar(page, '--accent')).toBe('#2563eb');
+    await page.locator('.ed-preview').click({ position: { x: 5, y: 5 } });
+    await expect(page.locator('.tb-menu[open]')).toHaveCount(0);
+  });
+
+  test('each new template opens in the editor without errors', async ({ page }) => {
+    await newCv(page);
+    for (const id of ['profile', 'timeline', 'elegant', 'bold', 'corporate', 'studio']) {
+      await page.locator('[data-role="template"]').selectOption(id);
+      await expect(live(page).locator(`.tpl-${id}`)).toContainText('Brightline Analytics');
+    }
+  });
+});
+
+test.describe('undo and redo', () => {
+  test('steps back and forward through changes, including the toolbar state', async ({ page }) => {
+    await newCv(page);
+    const undo = page.getByRole('button', { name: 'Undo' });
+    const redo = page.getByRole('button', { name: 'Redo' });
+    await expect(undo).toBeDisabled();
+    await page.locator('[data-role="template"]').selectOption('elegant');
+    await field(page, 'personal.name').fill('Alex Morgan');
+    await expect(undo).toBeEnabled();
+
+    await undo.click();
+    await expect(field(page, 'personal.name')).toHaveValue('Jordan Rivera');
+    await expect(live(page).locator('.tpl-elegant')).toContainText('Jordan Rivera');
+    await undo.click();
+    await expect(live(page).locator('.tpl-banner')).toBeVisible();
+    await expect(page.locator('[data-role="template"]')).toHaveValue('banner');
+    await expect(undo).toBeDisabled();
+
+    await redo.click();
+    await redo.click();
+    await expect(live(page).locator('.tpl-elegant')).toContainText('Alex Morgan');
+    await expect(redo).toBeDisabled();
+
+    await page.reload(); // the redone state is what was saved
+    await expect(field(page, 'personal.name')).toHaveValue('Alex Morgan');
+  });
+});
+
+test.describe('photo', () => {
+  test('an uploaded image is cropped, shown on the page, kept after a reload, and removable', async ({ page }) => {
+    await newCv(page);
+    await page.locator('[data-role="photo"]').setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: await widePng(page) });
+    const img = live(page).locator('img.r-photo');
+    await expect(img).toHaveAttribute('src', /^data:image\/jpeg;base64,/);
+    expect(await img.evaluate(el => [el.naturalWidth, el.naturalHeight])).toEqual([320, 320]);
+    await page.reload();
+    await expect(live(page).locator('img.r-photo')).toBeVisible();
+
+    const size = await page.evaluate(async () => {
+      const { store } = await import('/js/store.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      return (await buildPdf(store.get(location.hash.replace('#edit-', '')), document.querySelector('#print-area'))).blob.size;
+    });
+    expect(size).toBeGreaterThan(15 * 1024);
+
+    await page.getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(live(page).locator('img.r-photo')).toHaveCount(0);
+  });
+
+  test('a file that is not an image is refused with a message', async ({ page }) => {
+    await newCv(page);
+    await page.locator('[data-role="photo"]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
+    await expect(page.locator('.toast')).toContainText('Choose a JPG, PNG or WebP image.');
+    await expect(live(page).locator('img.r-photo')).toHaveCount(0);
   });
 });

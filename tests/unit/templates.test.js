@@ -174,3 +174,76 @@ describe('contact links', () => {
     }
   });
 });
+
+const PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+const pageStyle = html => html.match(/<div class="page [^"]*" style="([^"]*)"/)[1];
+
+describe('templates list', () => {
+  test('every template has a known layout, header and skills style', () => {
+    assert.equal(TEMPLATES.length, 13);
+    assert.equal(new Set(TEMPLATES.map(t => t.id)).size, TEMPLATES.length);
+    for (const t of TEMPLATES) {
+      assert.ok(['single', 'side-left', 'side-right', 'profile'].includes(t.layout), t.id);
+      assert.ok(['plain', 'split', 'sidebar', 'banner'].includes(t.header), t.id);
+      assert.ok(['inline', 'chips', 'list'].includes(t.skills), t.id);
+      assert.ok(t.name && t.desc && t.tags.length, t.id);
+    }
+  });
+
+  test('every template shows every part of a full CV exactly once', () => {
+    for (const t of TEMPLATES) {
+      const html = renderResume(sampleResume(t.id));
+      for (const text of ['Jordan Rivera', 'Brightline Analytics', 'B.A. Interaction Design', 'Figma', 'Open-source icon set', 'Nielsen Norman UX Certification', 'Spanish']) {
+        assert.equal(html.split(text).length - 1, 1, `${t.id}: "${text}"`);
+      }
+      assert.ok(html.includes('Product designer with 7 years'), `${t.id}: summary`);
+    }
+  });
+
+  test('an unknown template id renders with the default template instead of failing', () => {
+    const html = renderResume({ ...sampleResume(), templateId: 'nope' });
+    assert.ok(html.includes('Jordan Rivera'));
+    assert.ok(renderLetter({ ...sampleLetter(), templateId: 'nope' }).includes('Sincerely,'));
+  });
+});
+
+describe('page settings on the page', () => {
+  test('page size, spacing and margins are set as style variables', () => {
+    const a4 = pageStyle(renderResume(sampleResume()));
+    assert.match(a4, /--pw:794px;--ph:1123px;--sp:1;--mg:1/);
+    const doc = sampleResume();
+    doc.theme = { ...doc.theme, size: 'letter', spacing: 1, margin: 6 };
+    assert.match(pageStyle(renderResume(doc)), /--pw:816px;--ph:1056px;--sp:0\.6;--mg:1\.4/);
+    assert.match(pageStyle(renderLetter({ ...sampleLetter(), theme: doc.theme })), /--pw:816px;--ph:1056px/);
+  });
+
+  test('hostile settings cannot add styles to the page', () => {
+    const doc = sampleResume();
+    doc.theme = { ...doc.theme, size: 'a4;background:url(//evil)', spacing: '1;color:red', margin: { toString: () => 'x' } };
+    assert.match(pageStyle(renderResume(doc)), /--pw:794px;--ph:1123px;--sp:1;--mg:1$/);
+  });
+});
+
+describe('photo on the page', () => {
+  test('a photo is drawn once in every template, for CVs and letters', () => {
+    for (const t of TEMPLATES) {
+      for (const doc of [sampleResume(t.id), { ...sampleLetter(), templateId: t.id }]) {
+        doc.personal = { ...doc.personal, photo: PHOTO };
+        const html = renderDoc(doc);
+        assert.equal(html.split('<img class="r-photo"').length - 1, 1, `${t.id} ${doc.type}`);
+        assert.ok(html.includes(`src="${PHOTO}"`), `${t.id} ${doc.type}`);
+      }
+    }
+  });
+
+  test('no photo, no image; and only embedded images are ever drawn', () => {
+    assert.equal(renderResume(sampleResume()).includes('<img'), false);
+    for (const photo of ['https://example.com/track.gif', 'javascript:alert(1)', 'data:image/svg+xml;base64,AAAA', 'x" onerror="alert(1)']) {
+      for (const t of TEMPLATES) {
+        const doc = sampleResume(t.id);
+        doc.personal.photo = photo;
+        assert.equal(renderResume(doc).includes('<img'), false, `${t.id}: ${photo}`);
+      }
+    }
+  });
+});

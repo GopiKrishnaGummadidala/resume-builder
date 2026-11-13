@@ -28,7 +28,10 @@ Then open http://localhost:5180. Any static file server works (for example `pyth
 
 ## Features
 
-- **CV builder**: 7 templates (Banner, Classic, Minimal, Executive, Tech are single-column; Modern and Compact are two-column), 8 colours, 5 fonts, live A4 preview, reorderable sections.
+- **CV builder**: 13 templates. Single-column: Banner, Classic, Minimal, Executive, Tech, Timeline, Elegant, Bold, Corporate. Two-column: Profile, Modern, Studio, Compact. Live preview, reorderable sections.
+- **Layout, Fonts, Themes**: content spacing, page margins and page size (A4 or US Letter); 8 fonts; 8 colours or any custom colour.
+- **Photo**: optional profile photo, cropped to a square and shrunk in the browser before it is stored.
+- **Undo / redo** for every change in the editor.
 - **Cover letter builder**: the same templates, so a CV and its letter match. Edit the letter directly on the page (recipient, date, greeting, body, closing) or in the form. Bold and sub-headings; pasting from Word or Google Docs keeps bold. "Draft from a CV" writes a first draft.
 - **Live coach**: a score with concrete tips (action verbs, numbers, bullet counts, length, consistency).
 - **Strengthen bullets**: rewrites weak openers ("Responsible for…" → "Managed…").
@@ -54,8 +57,8 @@ npm ci
 | Command | What it does |
 |---|---|
 | `npm run lint` | ESLint over the app, tests and scripts |
-| `npm test` | 88 unit tests (Node's built-in runner, no browser) |
-| `npm run test:e2e` | 26 browser tests (Playwright; run `npx playwright install chromium` once) |
+| `npm test` | 107 unit tests (Node's built-in runner, no browser) |
+| `npm run test:e2e` | 33 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
 | `npm run serve` | Static dev server on port 5180 |
 | `npm run load` | HTTP load test against the running container |
 | `node scripts/bench.mjs` | Timings for rendering, coaching, storage |
@@ -90,8 +93,10 @@ js/pdf-export.js      PDF: indexed PNG page image + invisible text layer
 js/importer.js        PDF/TXT import and résumé text parsing
 js/richtext.js        pasted HTML and in-page edits → letter markup
 js/platform.js        CDN libraries (pinned, integrity-checked), file saving
+js/photo.js           crops and shrinks an uploaded profile photo
 js/ui.js              DOM helpers, toast, dialogs
 js/store.js           localStorage persistence with cross-tab merge
+js/history.js         undo/redo snapshot list
 js/analysis.js        coach, ATS check, keyword matcher
 js/templates.js       document → HTML string, escaping
 js/data.js            document model, validation, samples

@@ -1,18 +1,33 @@
 // Document templates. Each template renders a CV and a matching cover letter into an A4 ".page".
-import { FONTS, splitLines, splitList } from './data.js';
+import { FONTS, splitLines, splitList, pageSize, pageScale, validPhoto } from './data.js';
 
-/** A4 page size in CSS pixels at 96 dpi. */
+/** A4 page size in CSS pixels at 96 dpi (the default; see pageSize() for a document's own size). */
 export const PAGE = Object.freeze({ W: 794, H: 1123 });
 
+/**
+ * layout: where the sections go.
+ *   single     one column
+ *   side-left  full-height sidebar on the left (name, contact, skills)
+ *   side-right header on top, narrow column on the right
+ *   profile    card header with the summary in it, shaded column on the right
+ * header: which header is drawn. skills: how skills are shown in the main column.
+ */
 export const TEMPLATES = [
-  { id: 'banner', name: 'Banner', tags: ['ats', 'single'], desc: 'Two-tone header band with an icon contact row. Letters get bold section sub-headings.' },
-  { id: 'classic', name: 'Classic', tags: ['ats', 'single'], desc: 'Centered header, single column. Safest choice for applicant tracking systems.' },
-  { id: 'minimal', name: 'Minimal', tags: ['ats', 'single'], desc: 'Quiet, left-aligned layout with hairline rules. Great for conservative industries.' },
-  { id: 'executive', name: 'Executive', tags: ['ats', 'single'], desc: 'Bold color header band for senior and leadership roles.' },
-  { id: 'tech', name: 'Tech', tags: ['ats', 'single'], desc: 'Skills up front as chips — built for engineering and IT roles.' },
-  { id: 'modern', name: 'Modern', tags: ['two-col', 'creative'], desc: 'Colored sidebar with contact, skills and languages.' },
-  { id: 'compact', name: 'Compact', tags: ['two-col'], desc: 'Dense two-column layout that fits a lot on one page.' },
+  { id: 'banner', name: 'Banner', layout: 'single', header: 'banner', skills: 'inline', tags: ['ats', 'single'], desc: 'Two-tone header band with an icon contact row. Letters get bold section sub-headings.' },
+  { id: 'profile', name: 'Profile', layout: 'profile', header: 'banner', skills: 'chips', tags: ['two-col', 'photo'], desc: 'Header card with your photo and summary, experience on the left, skill chips on the right.' },
+  { id: 'classic', name: 'Classic', layout: 'single', header: 'plain', skills: 'inline', tags: ['ats', 'single'], desc: 'Centered header, single column. Safest choice for applicant tracking systems.' },
+  { id: 'minimal', name: 'Minimal', layout: 'single', header: 'plain', skills: 'inline', tags: ['ats', 'single'], desc: 'Quiet, left-aligned layout with hairline rules. Great for conservative industries.' },
+  { id: 'executive', name: 'Executive', layout: 'single', header: 'plain', skills: 'inline', tags: ['ats', 'single'], desc: 'Bold color header band for senior and leadership roles.' },
+  { id: 'tech', name: 'Tech', layout: 'single', header: 'plain', skills: 'chips', skillsFirst: true, tags: ['ats', 'single'], desc: 'Skills up front as chips — built for engineering and IT roles.' },
+  { id: 'timeline', name: 'Timeline', layout: 'single', header: 'plain', skills: 'chips', tags: ['single', 'creative'], desc: 'Your career as a line of dated milestones, newest first.' },
+  { id: 'elegant', name: 'Elegant', layout: 'single', header: 'plain', skills: 'inline', tags: ['ats', 'single'], desc: 'Centered, widely spaced capitals and fine rules. Suits law, finance and academia.' },
+  { id: 'bold', name: 'Bold', layout: 'single', header: 'plain', skills: 'chips', tags: ['single', 'creative'], desc: 'A large name and solid heading bars for a confident first impression.' },
+  { id: 'corporate', name: 'Corporate', layout: 'single', header: 'split', skills: 'inline', tags: ['ats', 'single'], desc: 'Name on the left, contact details on the right, tinted heading strips.' },
+  { id: 'modern', name: 'Modern', layout: 'side-left', header: 'sidebar', skills: 'list', tags: ['two-col', 'creative', 'photo'], desc: 'Colored sidebar with contact, skills and languages.' },
+  { id: 'studio', name: 'Studio', layout: 'side-left', header: 'sidebar', skills: 'list', tags: ['two-col', 'photo'], desc: 'Soft grey sidebar with your photo, and skill bars in your accent colour.' },
+  { id: 'compact', name: 'Compact', layout: 'side-right', header: 'plain', skills: 'list', tags: ['two-col'], desc: 'Dense two-column layout that fits a lot on one page.' },
 ];
+const templateOf = id => TEMPLATES.find(t => t.id === id) || TEMPLATES[0];
 
 export const TEMPLATE_FILTERS = [
   { id: 'all', label: 'All' },
@@ -20,6 +35,7 @@ export const TEMPLATE_FILTERS = [
   { id: 'single', label: 'Single column' },
   { id: 'two-col', label: 'Two column' },
   { id: 'creative', label: 'Creative' },
+  { id: 'photo', label: 'With photo' },
 ];
 
 export const esc = s =>
@@ -98,9 +114,26 @@ export function letterBlocks(body) {
   return out.join('');
 }
 
+// Section icons for templates that show them (drawn for this app; stroke = currentColor).
+const SECTION_ICONS = {
+  Summary: '<path d="M5 6h14M5 12h14M5 18h9"/>',
+  Experience: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
+  Education: '<path d="m2 9 10-5 10 5-10 5z"/><path d="M6 11.5V16c2 2 10 2 12 0v-4.5"/>',
+  Projects: '<path d="M4 6a2 2 0 0 1 2-2h4l2 3h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>',
+  Skills: '<path d="m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z"/>',
+  Languages: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  Certifications: '<circle cx="12" cy="9" r="6"/><path d="m8.5 14-1.5 7 5-3 5 3-1.5-7"/>',
+  Contact: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+};
+
 function section(title, inner) {
-  return inner ? `<section class="r-sec"><h3 class="r-h">${esc(title)}</h3>${inner}</section>` : '';
+  if (!inner) return '';
+  const icon = SECTION_ICONS[title] ? `<span class="r-ico" aria-hidden="true"><svg viewBox="0 0 24 24">${SECTION_ICONS[title]}</svg></span>` : '';
+  return `<section class="r-sec" data-sec="${title.toLowerCase()}"><h3 class="r-h">${icon}<span>${esc(title)}</span></h3>${inner}</section>`;
 }
+
+/** Round profile photo, or '' when the document has none. Only embedded images are ever drawn. */
+const photoHtml = p => (validPhoto(p.photo) ? `<img class="r-photo" src="${esc(p.photo)}" alt="">` : '');
 
 function experienceHtml(r) {
   if (!r.experience.length) return '';
@@ -145,41 +178,46 @@ const skillsList = r => (splitList(r.skills).length ? `<ul class="r-plain">${spl
 const textBlock = t => (t ? `<p class="r-p">${esc(t)}</p>` : '');
 const listBlock = t => (splitList(t).length ? `<ul class="r-plain">${splitList(t).map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '');
 
-function header(p, variant) {
+/**
+ * @param {object} p personal details
+ * @param {'plain'|'split'|'sidebar'|'banner'} variant
+ * @param {string} [summary] shown inside the banner header (Profile template)
+ */
+function header(p, variant, summary = '') {
   const name = esc(p.name) || 'Your Name';
+  const title = p.title ? `<div class="r-title">${esc(p.title)}</div>` : '';
+  const photo = photoHtml(p);
   const contacts = contactItems(p);
-  if (variant === 'sidebar') {
-    return `<div class="r-name">${name}</div>${p.title ? `<div class="r-title">${esc(p.title)}</div>` : ''}`;
-  }
+  if (variant === 'sidebar') return `${photo}<div class="r-name">${name}</div>${title}`;
   if (variant === 'banner') {
     const ci = iconContacts(p);
-    return `<header class="b-head">
-      <div class="b-top"><div class="r-name">${name}</div>${p.title ? `<div class="r-title">${esc(p.title)}</div>` : ''}</div>
+    return `<header class="b-head${photo ? ' has-photo' : ''}">
+      <div class="b-top">${photo}<div class="b-id"><div class="r-name">${name}</div>${title}${summary ? `<p class="b-summary">${esc(summary)}</p>` : ''}</div></div>
       ${ci ? `<div class="b-contact">${ci}</div>` : ''}
     </header>`;
   }
-  return `<header class="r-header">
-    <div class="r-name">${name}</div>
-    ${p.title ? `<div class="r-title">${esc(p.title)}</div>` : ''}
-    ${contacts.length ? `<div class="r-contact">${contacts.map(c => `<span>${c}</span>`).join('')}</div>` : ''}
-  </header>`;
+  const contactRow = contacts.length ? `<div class="r-contact">${contacts.map(c => `<span>${c}</span>`).join('')}</div>` : '';
+  if (variant === 'split') {
+    return `<header class="r-header r-split">${photo}<div class="r-id"><div class="r-name">${name}</div>${title}</div>${contactRow}</header>`;
+  }
+  return `<header class="r-header${photo ? ' has-photo' : ''}">${photo}<div class="r-id"><div class="r-name">${name}</div>${title}${contactRow}</div></header>`;
 }
 
 function pageWrap(doc, inner) {
-  const style = `--accent:${esc(doc.theme.color)};--font:${fontCss(doc.theme.font)}`;
+  const size = pageSize(doc);
+  const scale = pageScale(doc);
+  const style = `--accent:${esc(doc.theme.color)};--font:${fontCss(doc.theme.font)};--pw:${size.W}px;--ph:${size.H}px;--sp:${scale.spacing};--mg:${scale.margin}`;
   return `<div class="page tpl-${esc(doc.templateId)}" style="${style}">${inner}</div>`;
 }
 
 export function renderResume(r) {
-  const t = r.templateId;
-  const main = [
-    section('Summary', textBlock(r.summary)),
-    section('Experience', experienceHtml(r)),
-    section('Education', educationHtml(r)),
-    section('Projects', projectsHtml(r)),
-  ];
+  const t = templateOf(r.templateId);
+  const summary = section('Summary', textBlock(r.summary));
+  const experience = section('Experience', experienceHtml(r));
+  const education = section('Education', educationHtml(r));
+  const projects = section('Projects', projectsHtml(r));
 
-  if (t === 'modern' || t === 'compact') {
+  if (t.layout === 'side-left' || t.layout === 'side-right') {
     const contacts = contactItems(r.personal);
     const contactSec = contacts.length ? section('Contact', `<ul class="r-plain">${contacts.map(c => `<li>${c}</li>`).join('')}</ul>`) : '';
     const sideRest = [
@@ -187,17 +225,29 @@ export function renderResume(r) {
       section('Languages', listBlock(r.languages)),
       section('Certifications', listBlock(r.certifications)),
     ].join('');
-    if (t === 'modern') {
-      return pageWrap(r, `<div class="r-cols"><aside class="r-side">${header(r.personal, 'sidebar')}${contactSec}${sideRest}</aside><main class="r-main">${main.join('')}</main></div>`);
+    const main = `<main class="r-main">${summary}${experience}${education}${projects}</main>`;
+    if (t.layout === 'side-left') {
+      return pageWrap(r, `<div class="r-cols"><aside class="r-side">${header(r.personal, 'sidebar')}${contactSec}${sideRest}</aside>${main}</div>`);
     }
-    return pageWrap(r, `${header(r.personal)}<div class="r-cols"><main class="r-main">${main.join('')}</main><aside class="r-side">${sideRest}</aside></div>`);
+    return pageWrap(r, `${header(r.personal, t.header)}<div class="r-cols">${main}<aside class="r-side">${sideRest}</aside></div>`);
   }
 
-  const skills = section('Skills', t === 'tech' ? skillsChips(r) : skillsInline(r));
+  if (t.layout === 'profile') {
+    const side = [
+      section('Skills', skillsChips(r)),
+      section('Languages', listBlock(r.languages)),
+      section('Certifications', listBlock(r.certifications)),
+    ].join('');
+    return pageWrap(r, `${header(r.personal, 'banner', r.summary)}<div class="b-body p-cols"><main class="r-main">${experience}${education}${projects}</main>${side ? `<aside class="r-side">${side}</aside>` : ''}</div>`);
+  }
+
+  const skills = section('Skills', t.skills === 'chips' ? skillsChips(r) : skillsInline(r));
   const extras = [section('Certifications', listBlock(r.certifications)), section('Languages', textBlock(r.languages))];
-  const order = t === 'tech' ? [main[0], skills, main[1], main[3], main[2], ...extras] : [...main.slice(0, 3), skills, main[3], ...extras];
-  if (t === 'banner') return pageWrap(r, header(r.personal, 'banner') + `<div class="b-body">${order.join('')}</div>`);
-  return pageWrap(r, header(r.personal) + order.join(''));
+  const order = t.skillsFirst
+    ? [summary, skills, experience, projects, education, ...extras]
+    : [summary, experience, education, skills, projects, ...extras];
+  if (t.header === 'banner') return pageWrap(r, header(r.personal, 'banner') + `<div class="b-body">${order.join('')}</div>`);
+  return pageWrap(r, header(r.personal, t.header) + order.join(''));
 }
 
 /**
@@ -205,7 +255,7 @@ export function renderResume(r) {
  * @param {{editable?: boolean}} [opts] editable: render the body as an in-page editor (live preview only, never print/PDF)
  */
 export function renderLetter(l, opts = {}) {
-  const t = l.templateId;
+  const t = templateOf(l.templateId);
   const rec = l.recipient;
   const recipientLines = [rec.name, rec.title, rec.company, rec.address].filter(Boolean).map(esc);
   const blocks = opts.editable
@@ -228,7 +278,7 @@ export function renderLetter(l, opts = {}) {
   const signer = esc(l.personal.name) || 'Your Name';
   const greeting = ef('greeting', esc(l.greeting?.trim() || 'Dear Hiring Manager,'), 'Greeting');
   const date = ef('date', esc(l.date), 'Date');
-  if (t === 'banner') {
+  if (t.header === 'banner') {
     return pageWrap(l, `${header(l.personal, 'banner')}<div class="b-body l-banner">
       <div class="b-to">
         <div class="b-label">To</div><div class="b-rec">${toLines.join('<br>')}</div>
@@ -250,13 +300,13 @@ export function renderLetter(l, opts = {}) {
     ${blocks}
     <p class="l-close">${closing}<br><span class="l-sign">${signer}</span></p>
   </div>`;
-  if (t === 'modern') {
+  if (t.layout === 'side-left') {
     const contacts = contactItems(l.personal);
     return pageWrap(l, `<div class="r-cols"><aside class="r-side">${header(l.personal, 'sidebar')}${
       contacts.length ? section('Contact', `<ul class="r-plain">${contacts.map(c => `<li>${c}</li>`).join('')}</ul>`) : ''
     }</aside><main class="r-main">${body}</main></div>`);
   }
-  return pageWrap(l, header(l.personal) + body);
+  return pageWrap(l, header(l.personal, t.header) + body);
 }
 
 export const renderDoc = (d, opts) => (d.type === 'cover' ? renderLetter(d, opts) : renderResume(d));

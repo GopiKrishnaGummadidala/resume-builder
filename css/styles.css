@@ -301,3 +301,36 @@ select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; ba
 .fn-row { display: flex; align-items: center; gap: 8px; }
 .fn-row input { flex: 1; min-width: 0; }
 .fn-error { color: var(--bad); margin: 8px 0 0; }
+
+/* ===== Editor toolbar menus (Layout, Fonts, Themes) ===== */
+.tb-menu { position: relative; }
+.tb-menu > summary { list-style: none; user-select: none; }
+.tb-menu > summary::-webkit-details-marker { display: none; }
+.tb-menu > summary::after { content: '▾'; font-size: 11px; opacity: .7; }
+.tb-menu[open] > summary { background: var(--tint); border-color: var(--tint-strong); }
+.tb-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; width: 260px; max-width: calc(100vw - 32px); display: grid; gap: 14px; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(15, 18, 32, .18); }
+.tb-range { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+.tb-range input { width: 100%; accent-color: var(--brand); }
+.tb-ends { display: flex; justify-content: space-between; font-weight: 400; }
+.tb-size { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; }
+.tb-size legend { font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 4px; }
+.tb-size input { accent-color: var(--brand); }
+.tb-list { gap: 2px; padding: 6px; max-height: 320px; overflow-y: auto; }
+.tb-option { text-align: left; font-size: 15px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); cursor: pointer; }
+.tb-option:hover { background: var(--tint); }
+.tb-option.active { background: var(--tint); font-weight: 700; box-shadow: inset 3px 0 0 var(--brand); }
+.tb-custom { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 600; }
+.tb-custom input { width: 44px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; }
+.tb-pop .swatches { gap: 8px; }
+.tb-pop .swatch { width: 26px; height: 26px; }
+.ed-toolbar .icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Photo picker in the personal details form */
+.photo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.photo-row .btn { margin-right: 4px; }
+.photo-row p { margin-top: 4px; }
+.photo-thumb { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--line); }
+.photo-empty { display: grid; place-items: center; font-size: 26px; color: var(--muted); background: var(--surface-2); }
+.photo-pick { cursor: pointer; }
+.photo-pick:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

@@ -115,6 +115,30 @@ They run instantly, offline, cost nothing, never invent qualifications, and can 
 
 The app is useful pre-filled, but a phone number does not belong in a repository. A missing file simply means empty defaults. **Cost:** an image built on a machine that has the file contains it (documented in the Dockerfile); CI images never do, and a CI step checks that.
 
-## 11. Container hardening
+## 11. Templates as data, layout settings as CSS variables
+
+**Decision:** a template is a row in a table: a layout, a header style, a skills style and a CSS class. Spacing, margins and page size are three values on the document that become CSS variables on the page.
+
+The first seven templates were told apart by checks on the template id inside the renderer. Adding six more that way would have doubled the branches. With the table, a new template that reuses an existing layout is one row and some CSS, and the renderer has four layout paths however many templates there are.
+
+Spacing and margins are steps (1 to 7 and 1 to 6), not free numbers. A step is validated as an integer in range and mapped to a multiplier in code, so nothing a file contains can reach a `style` attribute. Each template keeps its own proportions, because the multiplier scales the template's own values.
+
+**Cost:** a template with a truly new structure still needs a new layout path in `templates.js`.
+
+## 12. Photo stored in the document, shrunk on upload
+
+**Decision:** an uploaded image is cropped to a centred square, drawn to a 320 px canvas and saved as a JPEG data URL inside the document.
+
+| Option | Verdict |
+|---|---|
+| Store the original file | A phone photo is several megabytes; two would fill the 5 MB localStorage quota |
+| IndexedDB for images | Adds an asynchronous second store, and a document would no longer be one self-contained JSON object (export, import and cross-tab merge all rely on that) |
+| **320 px JPEG in the document** (chosen) | About 30 KB; export, import, duplicate and merge keep working unchanged; re-encoding removes metadata such as GPS position |
+
+320 px is 2.7 times the largest size a photo is drawn at (120 px), which is enough for the 2× page capture.
+
+**Cost:** no manual crop; the centre square is used.
+
+## 13. Container hardening
 
 nginx runs from the unprivileged image as uid 101 on a read-only filesystem with all capabilities dropped. The server only reads files, so it is given the ability to do nothing else. A Content-Security-Policy limits scripts to the site itself and cdnjs. The browser tests run against the container in CI specifically to prove the policy does not break PDF export or import.

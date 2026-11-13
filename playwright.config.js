@@ -2,6 +2,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const external = process.env.BASE_URL;
+// PW_CHANNEL=msedge (or chrome) runs the tests in an installed browser instead of Playwright's own
+// Chromium build, for machines whose application-control policy blocks unsigned executables.
+const channel = process.env.PW_CHANNEL || undefined;
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -16,7 +19,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     acceptDownloads: true,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel, viewport: { width: 1440, height: 900 } } }],
   webServer: external ? undefined : {
     command: 'node scripts/serve.mjs 4173',
     url: 'http://localhost:4173',

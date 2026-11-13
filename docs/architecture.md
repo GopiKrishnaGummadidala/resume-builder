@@ -50,18 +50,20 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `importer.js` | Reads PDF/TXT files; turns résumé text into a structured CV | no (pdf.js only) |
 | | `richtext.js` | Converts pasted HTML and the in-page editor's DOM to letter markup; bold/heading toggles | yes |
 | | `platform.js` | Loads CDN libraries (pinned + integrity hash); saves files; detects the host | yes |
+| | `photo.js` | Crops an uploaded image to a square and shrinks it to a 320 px JPEG | yes (canvas) |
 | | `ui.js` | Query helpers, toast, confirm and file-name dialogs, path get/set | yes |
 | Core | `store.js` | Persistence, cross-tab merge, change notifications | storage only |
+| | `history.js` | Undo/redo: a list of snapshots with a cursor (pure) | no |
 | | `analysis.js` | Coach, ATS check, keyword matcher (pure functions) | no |
 | | `templates.js` | Renders a document to an HTML string; escaping | no |
 | | `data.js` | Document shapes, defaults, validation (`normalizeDoc`), samples | no |
 
-The core layer is plain JavaScript with no browser APIs, which is why the 88 unit tests run in Node without a browser or any test library.
+The core layer is plain JavaScript with no browser APIs, which is why the 107 unit tests run in Node without a browser or any test library.
 
 ```mermaid
 flowchart TD
     app --> editor & tools & preview & importer & store
-    editor --> pdfexport[pdf-export] & richtext & analysis & preview & store & platform & ui
+    editor --> pdfexport[pdf-export] & richtext & analysis & preview & store & platform & ui & history & photo
     tools --> analysis & importer & store & ui
     pdfexport --> platform & templates
     importer --> platform & data
@@ -73,28 +75,32 @@ flowchart TD
     templates --> data
 ```
 
-The views also import `data`, `templates` and `ui` directly; those arrows are left out to keep the diagram readable. `richtext.js` imports nothing.
+The views also import `data`, `templates` and `ui` directly; those arrows are left out to keep the diagram readable. `richtext.js`, `history.js` and `photo.js` import nothing.
 
 ## Key components
 
 ### Documents (`data.js`)
-Two document types share a base (`id`, `type`, `title`, `updatedAt`, `templateId`, `theme`, `personal`):
+Two document types share a base (`id`, `type`, `title`, `updatedAt`, `templateId`, `theme`, `personal`). `theme` holds the colour, font, content spacing step, page margin step and page size (`a4` or `letter`). `personal` holds the contact details and an optional `photo` (an embedded JPEG, PNG or WebP). On top of the base:
 
 - **CV** adds `summary`, `experience[]`, `education[]`, `skills`, `projects[]`, `certifications`, `languages`.
 - **Cover letter** adds `recipient`, `job`, `date`, `greeting`, `body`, `closing`.
 
 All values are strings. The letter body uses a small markup: a blank line starts a paragraph, a line starting with `# ` is a bold sub-heading, `**text**` is bold.
 
-`normalizeDoc()` is the single gate for anything coming from outside (storage, an imported JSON file). It whitelists fields, forces values to strings, caps lengths (300 characters for short fields, 5,000 for long ones, 20,000 for a letter body, 50 items per list), and replaces an unknown template, colour or font with the default.
+`normalizeDoc()` is the single gate for anything coming from outside (storage, an imported JSON file). It whitelists fields, forces values to strings, caps lengths (300 characters for short fields, 5,000 for long ones, 20,000 for a letter body, 50 items per list), and replaces an unknown template, colour, font, spacing step, margin step or page size with the default, and drops a photo that is not a small embedded image.
 
 ### Rendering (`templates.js`)
-A document is rendered to an HTML string for a fixed A4 page (794 × 1123 CSS pixels). The same function produces the live preview, the thumbnails and the page captured for PDF. Every value goes through `esc()`; nothing is inserted as raw HTML. Seven templates share one stylesheet (`css/templates.css`) and differ by a class on the page.
+A document is rendered to an HTML string for a page of fixed size: A4 (794 × 1123 CSS pixels) or US Letter (816 × 1056). The same function produces the live preview, the thumbnails and the page captured for PDF. Every value goes through `esc()`; nothing is inserted as raw HTML.
+
+The 13 templates are rows in one table (`TEMPLATES`). Each row names a layout (`single`, `side-left`, `side-right`, `profile`), a header style and a skills style; the renderer branches on those, never on a template's id. They share one stylesheet (`css/templates.css`) and differ by a class on the page. Page size, spacing and margins reach the stylesheet as CSS variables (`--pw`, `--ph`, `--sp`, `--mg`) computed from validated steps, so no stored value is written into a style.
 
 ### Storage (`store.js`)
 One `localStorage` entry holds `{ schema, docs, deleted }`. Every save is read–merge–write so that two open tabs do not overwrite each other. Details are in [concurrency.md](concurrency.md).
 
 ### Editor (`editor.js`)
 The form and the page preview edit the same in-memory object. Typing in the form re-renders the page. Typing on the page (the letter body and four single-line fields are editable in place) updates the object and the form, but does not re-render the page until focus leaves it, so the caret never jumps.
+
+The toolbar has Layout, Fonts and Themes menus (native `<details>` elements) and undo/redo. Undo keeps up to 100 snapshots of the document as JSON (`history.js`). Typing is recorded after a half-second pause so one step is a phrase; other changes are recorded at once. History lives in memory for the open editor only.
 
 ### PDF export (`pdf-export.js`)
 Render the document off-screen → capture it as a bitmap → encode each page as an indexed-colour PNG → place invisible, word-positioned text on top. The result looks identical to the preview, the text can be selected and parsed, and a full one-page letter is about 160 KB. The reasoning and measurements are in [design-rationale.md](design-rationale.md).
@@ -106,7 +112,8 @@ There is no server-side state and no authentication, so the attack surface is th
 | Threat | Mitigation |
 |---|---|
 | Script injection through document fields | All output escaped by `esc()`; unit tests inject markup into every field of every template; browser tests confirm nothing runs |
-| Hostile imported file | `normalizeDoc()` whitelists and coerces; template id, colour and font are checked against allow-lists; an import never replaces an existing document |
+| Hostile imported file | `normalizeDoc()` whitelists and coerces; template id, colour, font, page size and layout steps are checked against allow-lists; an import never replaces an existing document |
+| Photo used to load or run something | A photo must be an embedded JPEG, PNG or WebP (`data:image/…;base64`) under 400,000 characters; web addresses and SVG are refused in `normalizeDoc()` and again when rendering. Uploads are re-encoded through a canvas, which also strips metadata such as GPS position |
 | Tampered CDN file | Exact versions and Subresource Integrity hashes in `platform.js`; a unit test checks every library has both |
 | Injected script from elsewhere | Content-Security-Policy in nginx: scripts only from the site and cdnjs, no inline scripts, no `eval` |
 | Prototype pollution through form paths | `setPath`/`getPath` refuse `__proto__`, `prototype`, `constructor` |
@@ -125,4 +132,7 @@ These are deliberate trade-offs or open items, listed so a reviewer does not hav
 4. **The documents view renders a real preview per document.** Fine for tens of documents; hundreds would be slow to draw.
 5. **`index.html` and `artifact.html` are two copies of the same markup.** A unit test keeps them identical.
 6. **The coach, ATS check and matcher are rules, not a language model.** They are predictable and offline, but shallow.
-7. **`contenteditable="plaintext-only"`** (single-line fields on the page) needs Chrome/Edge/Safari or Firefox 136+. In older Firefox those four fields are still editable from the form.
+7. **A photo is stored inside the document** (about 30 KB as text), so it is repeated in every document and every undo snapshot that has one. Fine for tens of documents.
+8. **A document with a photo uses a 256-colour page image** instead of 48, so the photo has no visible bands. Such a PDF is somewhat larger (123 KB for the sample CV with a photo).
+9. **The photo is cropped to its centre square**; there is no manual crop.
+10. **`contenteditable="plaintext-only"`** (single-line fields on the page) needs Chrome/Edge/Safari or Firefox 136+. In older Firefox those four fields are still editable from the form.

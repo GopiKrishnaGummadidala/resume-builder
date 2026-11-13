@@ -8,14 +8,47 @@ export const FONTS = [
   { id: 'hind', label: 'Hind', css: "'Hind', system-ui, sans-serif" },
   { id: 'inter', label: 'Inter', css: "'Inter', system-ui, sans-serif" },
   { id: 'source', label: 'Source Sans', css: "'Source Sans 3', system-ui, sans-serif" },
+  { id: 'roboto', label: 'Roboto', css: "'Roboto', system-ui, sans-serif" },
+  { id: 'ubuntu', label: 'Ubuntu', css: "'Ubuntu', system-ui, sans-serif" },
   { id: 'lora', label: 'Lora (serif)', css: "'Lora', Georgia, serif" },
   { id: 'merri', label: 'Merriweather', css: "'Merriweather', Georgia, serif" },
+  { id: 'playfair', label: 'Playfair Display (serif)', css: "'Playfair Display', Georgia, serif" },
 ];
 
 /** Template ids the model accepts. templates.js renders exactly these (enforced by a unit test). */
-export const TEMPLATE_IDS = ['banner', 'classic', 'minimal', 'executive', 'tech', 'modern', 'compact'];
+export const TEMPLATE_IDS = [
+  'banner', 'profile', 'classic', 'minimal', 'executive', 'tech', 'timeline', 'elegant', 'bold', 'corporate',
+  'modern', 'studio', 'compact',
+];
 export const DEFAULT_TEMPLATE = 'banner';
-export const DEFAULT_THEME = () => ({ color: THEME_COLORS[0], font: 'hind' });
+
+/** Page sizes in CSS pixels at 96 dpi. */
+export const PAGE_SIZES = Object.freeze({
+  a4: Object.freeze({ W: 794, H: 1123, label: 'A4', pdf: 'a4' }),
+  letter: Object.freeze({ W: 816, H: 1056, label: 'US Letter', pdf: 'letter' }),
+});
+/** Content spacing and page margin steps, as multipliers of each template's own values. */
+export const SPACING_STEPS = Object.freeze([0.6, 0.8, 1, 1.2, 1.4, 1.7, 2]);
+export const MARGIN_STEPS = Object.freeze([0.5, 0.7, 0.85, 1, 1.2, 1.4]);
+export const DEFAULT_SPACING = 3; // 1-based step: multiplier 1
+export const DEFAULT_MARGIN = 4;  // 1-based step: multiplier 1
+export const DEFAULT_THEME = () => ({ color: THEME_COLORS[0], font: 'hind', spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN, size: 'a4' });
+
+/** Size of a document's page; unknown or missing sizes fall back to A4. */
+export const pageSize = doc => (Object.hasOwn(PAGE_SIZES, doc?.theme?.size ?? '') ? PAGE_SIZES[doc.theme.size] : PAGE_SIZES.a4);
+const step = (v, steps, fallback) => (Number.isInteger(v) && v >= 1 && v <= steps.length ? v : fallback);
+/** Spacing and margin multipliers for a document, tolerant of missing or invalid settings. */
+export const pageScale = doc => ({
+  spacing: SPACING_STEPS[step(doc?.theme?.spacing, SPACING_STEPS, DEFAULT_SPACING) - 1],
+  margin: MARGIN_STEPS[step(doc?.theme?.margin, MARGIN_STEPS, DEFAULT_MARGIN) - 1],
+});
+
+/** Longest photo the model accepts (a 320 px JPEG is about 30,000 characters). */
+export const PHOTO_MAX_CHARS = 400000;
+/** A photo is a small embedded image; anything else (a web address, script, SVG) is refused. */
+export const validPhoto = v =>
+  (typeof v === 'string' && v.length <= PHOTO_MAX_CHARS && /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(v) ? v : '');
+
 const EMPTY_PERSONAL = { name: '', title: '', email: '', phone: '', location: '', website: '', linkedin: '', github: '' };
 
 // Optional per-user defaults from js/profile.local.js (git-ignored; see profile.example.js).
@@ -27,7 +60,7 @@ try {
 export const DEFAULT_PERSONAL = Object.freeze(
   Object.fromEntries(Object.keys(EMPTY_PERSONAL).map(k => [k, String(localProfile[k] ?? '')]))
 );
-const blankPersonal = () => ({ ...DEFAULT_PERSONAL });
+const blankPersonal = () => ({ ...DEFAULT_PERSONAL, photo: '' });
 
 /** "5 November, 2026" */
 export function formatDate(d = new Date()) {
@@ -58,6 +91,7 @@ export function sampleResume(templateId = DEFAULT_TEMPLATE) {
     ...blankResume(templateId),
     title: 'Sample — Product Designer',
     personal: {
+      photo: '',
       name: 'Jordan Rivera',
       title: 'Senior Product Designer',
       email: 'jordan.rivera@example.com',
@@ -118,7 +152,7 @@ export function blankLetter(templateId = DEFAULT_TEMPLATE, fromResume = null) {
     title: LETTER_TITLE,
     updatedAt: Date.now(),
     templateId: fromResume ? fromResume.templateId : templateId,
-    theme: fromResume ? { ...fromResume.theme } : DEFAULT_THEME(),
+    theme: fromResume ? { ...DEFAULT_THEME(), ...fromResume.theme } : DEFAULT_THEME(),
     personal,
     recipient: { name: '', title: '', company: '', address: '' },
     job: { role: '', source: '' },
@@ -243,8 +277,11 @@ export function normalizeDoc(raw) {
     theme: {
       color: typeof theme.color === 'string' && /^#[0-9a-f]{6}$/i.test(theme.color) ? theme.color : THEME_COLORS[0],
       font: FONTS.some(f => f.id === theme.font) ? theme.font : 'hind',
+      spacing: step(theme.spacing, SPACING_STEPS, DEFAULT_SPACING),
+      margin: step(theme.margin, MARGIN_STEPS, DEFAULT_MARGIN),
+      size: Object.hasOwn(PAGE_SIZES, theme.size) ? theme.size : 'a4',
     },
-    personal: pick(raw.personal, Object.keys(EMPTY_PERSONAL)),
+    personal: { ...pick(raw.personal, Object.keys(EMPTY_PERSONAL)), photo: validPhoto(obj(raw.personal).photo) },
   };
   if (base.type === 'cover') {
     return {
