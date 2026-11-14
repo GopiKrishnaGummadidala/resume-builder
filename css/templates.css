@@ -224,8 +224,8 @@
 .r-level { display: none; }
 
 /* Signature: the Profile layout with a career line, and a card per topic in the right column */
-.tpl-signature { padding: 15px 15px 40px; color: #000; font-size: 9.6pt; }
-.tpl-signature .p-cols { display: grid; grid-template-columns: 1fr 244px; gap: 20px; margin-top: 20px; align-items: start; }
+.tpl-signature { padding: 15px 15px 36px; color: #000; font-size: 9pt; line-height: calc(1.38 + (var(--sp) - 1) * .35); }
+.tpl-signature .p-cols { display: grid; grid-template-columns: 1fr 236px; gap: 18px; margin-top: 18px; align-items: start; }
 .tpl-signature .p-cols > .r-main:only-child { grid-column: 1 / -1; }
 .tpl-signature .r-main .r-sec:first-child { margin-top: 0; }
 .tpl-signature .r-h { display: flex; align-items: center; gap: 9px; color: #313c4e; font-size: 11.5pt; letter-spacing: .03em; margin-bottom: 9px; }
@@ -234,8 +234,8 @@
 .tpl-signature [data-sec="experience"] .r-item { position: relative; margin-left: 12px; padding: 0 0 calc(12px * var(--sp)) 18px; margin-bottom: 0; border-left: 2px solid #d5dae2; }
 .tpl-signature [data-sec="experience"] .r-item:last-child { border-left-color: transparent; padding-bottom: 0; }
 .tpl-signature [data-sec="experience"] .r-item::before { content: ''; position: absolute; left: -7px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--accent); }
-.tpl-signature .r-row strong { font-size: 11.5pt; color: #111827; }
-.tpl-signature .r-sub { font-style: normal; color: #111827; font-size: 10.8pt; }
+.tpl-signature .r-row strong { font-size: 11pt; color: #111827; }
+.tpl-signature .r-sub { font-style: normal; color: #111827; font-size: 10.2pt; }
 .tpl-signature .r-date { color: var(--accent); font-style: italic; font-weight: 600; }
 .tpl-signature .r-main li strong { color: #111827; }
 /* Right column: one card per section */
@@ -244,13 +244,13 @@
 .tpl-signature .r-side .r-h { font-size: 10.5pt; margin-bottom: 8px; }
 .tpl-signature .r-side .r-ico { width: 22px; height: 22px; padding: 4px; }
 .tpl-signature .r-chips { gap: 5px; }
-.tpl-signature .r-chips span { background: #313c4e; border: 0; color: #fff; font-weight: 500; font-size: 8.8pt; padding: 3px 8px; }
+.tpl-signature .r-chips span { background: #313c4e; border: 0; color: #fff; font-weight: 500; font-size: 8.4pt; padding: 2px 7px; }
 .tpl-signature .r-side .r-item { margin-bottom: calc(9px * var(--sp)); }
 .tpl-signature .r-side .r-item:last-child { margin-bottom: 0; }
 .tpl-signature .r-side .r-row { flex-direction: column; gap: 0; }
 .tpl-signature .r-side .r-row strong { font-size: 10pt; }
 .tpl-signature .r-side .r-date { font-size: 8.8pt; }
-.tpl-signature .r-side .r-p { font-size: 9pt; color: #374151; }
+.tpl-signature .r-side .r-p { font-size: 8.6pt; color: #374151; }
 .tpl-signature .r-entries li { margin-bottom: 8px; }
 .tpl-signature .r-entries li:last-child { margin-bottom: 0; }
 .tpl-signature .r-e-d { color: var(--accent); opacity: 1; }

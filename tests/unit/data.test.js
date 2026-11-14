@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeDoc, blankResume, blankLetter, sampleResume, sampleLetter, draftLetterBody, resumeToText,
   formatDate, splitLines, splitList, TEMPLATE_IDS, DEFAULT_TEMPLATE, THEME_COLORS, FONTS, LETTER_TITLE, letterTitle,
-  entryParts, languageLevel, PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, pageScale, validPhoto, PHOTO_MAX_CHARS,
+  entryParts, languageLevel, PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, pageScale, validPhoto, PHOTO_MAX_CHARS, splitEntries,
 } from '../../js/data.js';
 import { TEMPLATES } from '../../js/templates.js';
 
@@ -253,5 +253,18 @@ describe('achievements, interests and company description', () => {
     const text = resumeToText(sampleResume());
     for (const part of ['Analytics platform for mid-size retailers', 'ACHIEVEMENTS', 'Design system adoption (2023)', 'INTERESTS', 'Trail running']) assert.ok(text.includes(part), part);
     assert.equal(text.includes('**'), false, 'bold markers are not part of the text');
+  });
+});
+
+describe('list splitting', () => {
+  test('a bullet may start in bold; a single marker is still dropped', () => {
+    assert.deepEqual(splitLines('**Built** the API\n* Wrote docs\n- Shipped\n• Tested\n*Note* stays'), ['**Built** the API', 'Wrote docs', 'Shipped', 'Tested', 'Note* stays']);
+  });
+
+  test('entries written one per line keep a comma inside a date; one-line lists still split at commas', () => {
+    assert.deepEqual(splitEntries('Certified Pro | Microsoft | Aug, 2018\nScrum Master'), ['Certified Pro | Microsoft | Aug, 2018', 'Scrum Master']);
+    assert.deepEqual(splitEntries('Scrum Master (2021), AWS Practitioner'), ['Scrum Master (2021)', 'AWS Practitioner']);
+    assert.deepEqual(splitEntries('German | Elementary'), ['German | Elementary']);
+    assert.deepEqual(splitEntries(''), []);
   });
 });

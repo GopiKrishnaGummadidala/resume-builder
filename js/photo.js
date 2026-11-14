@@ -19,13 +19,22 @@ export async function fileToPhoto(file) {
   } catch {
     throw new Error('That file could not be read as an image.');
   }
-  const side = Math.min(bitmap.width, bitmap.height);
+  const photo = squarePhoto(bitmap, bitmap.width, bitmap.height);
+  bitmap.close?.();
+  return photo;
+}
+
+/**
+ * The centred square of an image (a bitmap or a canvas), shrunk to PHOTO_SIDE and encoded as JPEG.
+ * Transparent areas become white.
+ */
+export function squarePhoto(source, width, height) {
+  const side = Math.min(width, height);
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = PHOTO_SIDE;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#ffffff'; // transparent PNGs get a white background in the JPEG
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, PHOTO_SIDE, PHOTO_SIDE);
-  ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, PHOTO_SIDE, PHOTO_SIDE);
-  bitmap.close?.();
+  ctx.drawImage(source, (width - side) / 2, (height - side) / 2, side, side, 0, 0, PHOTO_SIDE, PHOTO_SIDE);
   return canvas.toDataURL('image/jpeg', 0.85);
 }

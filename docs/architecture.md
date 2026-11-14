@@ -58,7 +58,7 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `templates.js` | Renders a document to an HTML string; escaping | no |
 | | `data.js` | Document shapes, defaults, validation (`normalizeDoc`), samples | no |
 
-The core layer is plain JavaScript with no browser APIs, which is why the 138 unit tests run in Node without a browser or any test library.
+The core layer is plain JavaScript with no browser APIs, which is why the 141 unit tests run in Node without a browser or any test library.
 
 ```mermaid
 flowchart TD

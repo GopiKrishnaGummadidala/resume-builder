@@ -253,8 +253,14 @@ export function resumeToText(r) {
   return lines.join('\n');
 }
 
-export const splitLines = s => (s || '').split('\n').map(x => x.trim().replace(/^[-•*]\s*/, '')).filter(Boolean);
+// A leading bullet marker is dropped; "**" is bold markup, not a marker, so a bullet may start in bold.
+export const splitLines = s => (s || '').split('\n').map(x => x.trim().replace(/^(?:[-•]|\*(?!\*))\s*/, '')).filter(Boolean);
 export const splitList = s => (s || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean);
+/**
+ * Certifications or languages: one per line when written "Name | detail | date" (a date such as
+ * "Aug, 2018" may contain a comma); older entries written on one line are separated by commas.
+ */
+export const splitEntries = s => (/\n|\|/.test(s || '') ? (s || '').split('\n').map(x => x.trim()).filter(Boolean) : splitList(s));
 
 /**
  * A certification or language can carry a detail and a date, separated by "|":

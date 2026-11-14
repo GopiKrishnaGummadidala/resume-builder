@@ -197,3 +197,10 @@ Beta AG
     assert.equal(r.interests, 'Chess, Cycling');
   });
 });
+
+describe('parseResumeText details', () => {
+  test('a bold phrase hyphenated over two lines is joined back into one bold run', () => {
+    const r = parseResumeText('Sam Lee\n\nAchievements\n**UI Customisation**\nBuilt **ssh-**\n**customize**, a shared framework.\nMar, 2023');
+    assert.equal(r.achievements[0].description, 'Built **ssh-customize**, a shared framework.');
+  });
+});

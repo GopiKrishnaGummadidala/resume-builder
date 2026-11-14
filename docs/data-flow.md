@@ -111,6 +111,8 @@ Files are read in the browser; they are never uploaded.
 
 **Fields (`parseResumeText`).** The text is cut into sections at recognised headings. In the header, each part is classed as a contact detail (email, phone, web address, bare profile handle, "City, Country") or text; the first text that reads like a name is the name, the next short line the headline, the rest the summary. Jobs are anchored on their date lines: the lines above are the title, employer and a company note, or, when the title shares the date's line, the line below is "Employer<TAB>Place". Bullets are split at markers, else at blank lines, else at sentence ends. Certificates, languages and achievements are split at their date lines or bold titles.
 
+**Photo (`findPhoto`).** On page 1, the largest roughly square image drawn in the top half and narrower than 40% of the page is taken as the profile photo, cropped to a square and shrunk like an upload. A PDF that is one page-sized picture (this app's own export) has no separate photo, so none is taken.
+
 Parsing is best-effort and the app says so after an import. A PDF exported by the app writes an invisible "- " before each list item, so a re-import (or a copy of the text) keeps the bullets apart.
 
 ## Exporting a PDF

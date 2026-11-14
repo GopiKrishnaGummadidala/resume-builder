@@ -1,5 +1,5 @@
 // Document templates. Each template renders a CV and a matching cover letter into an A4 ".page".
-import { FONTS, splitLines, splitList, pageSize, pageScale, validPhoto, entryParts, languageLevel } from './data.js';
+import { FONTS, splitLines, splitList, splitEntries, pageSize, pageScale, validPhoto, entryParts, languageLevel } from './data.js';
 
 /** A4 page size in CSS pixels at 96 dpi (the default; see pageSize() for a document's own size). */
 export const PAGE = Object.freeze({ W: 794, H: 1123 });
@@ -271,11 +271,11 @@ const levelDots = level => (level
   : '');
 /** Certifications or languages, one per line, each "Title | Detail | Date" (see entryParts). */
 function entriesInline(text) {
-  const items = splitList(text).map(entryParts).filter(e => e.title);
+  const items = splitEntries(text).map(entryParts).filter(e => e.title);
   return items.length ? `<p class="r-p">${items.map(e => esc([e.title, e.detail, e.date].filter(Boolean).join(' – '))).join(' · ')}</p>` : '';
 }
 function entriesList(text, { levels = false } = {}) {
-  const items = splitList(text).map(entryParts).filter(e => e.title);
+  const items = splitEntries(text).map(entryParts).filter(e => e.title);
   if (!items.length) return '';
   return `<ul class="r-plain r-entries">${items.map(e => `<li><span class="r-e-t">${esc(e.title)}</span>${
     e.detail ? `<span class="r-e-s">${esc(e.detail)}</span>` : ''}${

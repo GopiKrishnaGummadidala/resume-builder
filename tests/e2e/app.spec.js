@@ -784,3 +784,33 @@ test.describe('importing a PDF', () => {
     expect(text.text).toContain('Chess');
   });
 });
+
+test.describe('importing a PDF with a photo', () => {
+  test('a photo placed in the PDF is imported; a page that is one picture gives none', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { sampleResume } = await import('/js/data.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      const { importCv } = await import('/js/importer.js');
+      const { loadLib } = await import('/js/platform.js');
+      // A CV made by another tool: text, plus a photo drawn as its own image in the header.
+      const c = document.createElement('canvas');
+      c.width = c.height = 240;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 0, 240, 240);
+      ctx.fillStyle = '#2980b9'; ctx.fillRect(60, 60, 120, 120);
+      const { jsPDF } = await loadLib('jspdf');
+      const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+      pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', 30, 30, 90, 90);
+      pdf.setFontSize(20); pdf.text('Sam Taylor', 140, 60);
+      pdf.setFontSize(12); pdf.text('Data Engineer', 140, 80); pdf.text('sam@example.com', 140, 100);
+      const other = await importCv(new File([pdf.output('blob')], 'other.pdf', { type: 'application/pdf' }));
+      // This app's own export is one page-sized picture with a text layer.
+      const own = await importCv(new File([(await buildPdf(sampleResume('signature'), document.querySelector('#print-area'))).blob], 'own.pdf', { type: 'application/pdf' }));
+      return { name: other.personal.name, photo: other.personal.photo.slice(0, 23), ownName: own.personal.name, ownPhoto: own.personal.photo };
+    });
+    expect(result.name).toBe('Sam Taylor');
+    expect(result.photo).toBe('data:image/jpeg;base64,');
+    expect(result.ownName).toBe('Jordan Rivera');
+    expect(result.ownPhoto).toBe('');
+  });
+});

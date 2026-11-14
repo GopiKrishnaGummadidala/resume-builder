@@ -2,7 +2,7 @@
 import { blankResume, sampleResume, blankLetter, sampleLetter, normalizeDoc, uid } from './data.js';
 import { store } from './store.js';
 import { TEMPLATES, TEMPLATE_FILTERS, esc } from './templates.js';
-import { fileToText, parseResumeText } from './importer.js';
+import { importCv } from './importer.js';
 import { $, $$, go, timeAgo, toast, confirmDialog } from './ui.js';
 import { fitPages, miniPreview, pageObserver } from './preview.js';
 import { editorPage, mountEditor } from './editor.js';
@@ -182,7 +182,7 @@ document.addEventListener('change', async e => {
       if (!doc) throw new Error('this is not a Craftfolio export');
       doc.id = uid(); // imported copies never replace an existing document
     } else {
-      doc = parseResumeText(await fileToText(f));
+      doc = await importCv(f);
     }
     store.add(doc);
     toast('Imported — check each section, automatic parsing is best-effort');

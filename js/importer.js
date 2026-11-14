@@ -10,6 +10,7 @@
 // Both steps are pure functions, tested without a browser. Only fileToText touches pdf.js.
 import { blankResume, uid, languageLevel } from './data.js';
 import { loadLib, libUrl } from './platform.js';
+import { squarePhoto } from './photo.js';
 
 // The worker script is loaded in-page (it defines window.pdfjsWorker) so pdf.js runs on the main
 // thread; cross-origin Web Workers are blocked in sandboxed hosts.
@@ -20,11 +21,15 @@ async function loadPdfJs() {
   return pdfjs;
 }
 
-/** Positioned text runs of every page: [{ width, items: [{ str, x, y, w, h, bold }] }]. */
-async function pdfPages(file) {
+/**
+ * Positioned text runs of every page: [{ width, items: [{ str, x, y, w, h, bold }] }].
+ * With 'photo', the array also carries 'photo': the profile picture found on page 1, or ''.
+ */
+async function pdfPages(file, { photo = false } = {}) {
   const pdfjs = await loadPdfJs();
   const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise;
   const pages = [];
+  if (photo) pages.photo = await findPhoto(pdfjs, await pdf.getPage(1));
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
@@ -40,6 +45,78 @@ async function pdfPages(file) {
     });
   }
   return pages;
+}
+
+/**
+ * The profile picture on a page: the largest roughly square image of at least 80 px, drawn in the top
+ * half of the page and narrower than 40% of it. (A PDF made of one page-sized picture, like this app's
+ * own export, has no separate photo to take.) Returns a stored-photo data URL, or '' when there is none.
+ */
+async function findPhoto(pdfjs, page) {
+  try {
+    const ops = await page.getOperatorList();
+    const { width, height } = page.getViewport({ scale: 1 });
+    // Follow the transformation matrix to know where each image is drawn.
+    const mul = (a, b) => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3],
+      a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
+    let ctm = [1, 0, 0, 1, 0, 0];
+    const stack = [], found = [];
+    ops.fnArray.forEach((fn, i) => {
+      if (fn === pdfjs.OPS.save) stack.push(ctm);
+      else if (fn === pdfjs.OPS.restore) ctm = stack.pop() || ctm;
+      else if (fn === pdfjs.OPS.transform) ctm = mul(ctm, ops.argsArray[i]);
+      else if (fn === pdfjs.OPS.paintImageXObject) {
+        found.push({ name: ops.argsArray[i][0], top: ctm[5] + Math.abs(ctm[3]), drawnWidth: Math.hypot(ctm[0], ctm[1]) });
+      }
+    });
+    let best = null;
+    for (const f of found.filter(f => f.top > height / 2 && f.drawnWidth < width * 0.4)) {
+      const img = await new Promise(resolve => {
+        const get = objs => { try { objs.get(f.name, resolve); return true; } catch { return false; } };
+        if (!get(page.objs) && !get(page.commonObjs)) resolve(null);
+      });
+      if (!img?.width || img.width < 80 || img.height < 80) continue;
+      const ratio = img.width / img.height;
+      if (ratio < 0.7 || ratio > 1.4) continue;
+      if (!best || img.width * img.height > best.width * best.height) best = img;
+    }
+    return best ? squarePhoto(imageSource(best), best.width, best.height) : '';
+  } catch {
+    return ''; // a picture that cannot be read is simply not imported
+  }
+}
+
+/** Something drawable for a pdf.js image: its bitmap, or its pixels painted on a canvas. */
+function imageSource(img) {
+  if (img.bitmap) return img.bitmap;
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  const out = ctx.createImageData(img.width, img.height);
+  const src = img.data;
+  const n = img.width * img.height;
+  const per = src.length / n; // 4 = RGBA, 3 = RGB, 1 = grey
+  for (let p = 0; p < n; p++) {
+    const s = p * per, d = p * 4;
+    out.data[d] = src[s];
+    out.data[d + 1] = per >= 3 ? src[s + 1] : src[s];
+    out.data[d + 2] = per >= 3 ? src[s + 2] : src[s];
+    out.data[d + 3] = per === 4 ? src[s + 3] : 255;
+  }
+  ctx.putImageData(out, 0, 0);
+  return canvas;
+}
+
+/** Read a CV file (PDF or text) into a new CV, including the photo of a PDF. */
+export async function importCv(file) {
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    const pages = await pdfPages(file, { photo: true });
+    const doc = parseResumeText(itemsToText(pages));
+    doc.personal.photo = pages.photo || '';
+    return doc;
+  }
+  return parseResumeText(await file.text());
 }
 
 export async function fileToText(file) {
@@ -217,7 +294,8 @@ const sentenceEnd = s => /[.!?]["')\]]?$/.test(plain(s));
 const capitalise = s => s.replace(/^\w/, c => c.toUpperCase());
 /** Join wrapped lines into one; a word hyphenated at a line end is put back together. */
 const joinLines = lines => lines
-  .reduce((acc, l) => (acc && /[a-z]-$/.test(acc) && /^[a-z]/.test(l) ? acc + l : acc ? `${acc} ${l}` : l), '')
+  .reduce((acc, l) => (acc && /[a-z]-(\*\*)?$/.test(acc) && /^(\*\*)?[a-z]/.test(l) ? acc + l : acc ? `${acc} ${l}` : l), '')
+  .replace(/\*\*\*\*/g, '') // bold that continues across a hyphenated line break
   .replace(/\t/g, ' ')
   .replace(/\*\*\s+\*\*/g, ' ') // bold that continues over a line break is one run
   .replace(/\s+/g, ' ')
