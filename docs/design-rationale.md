@@ -168,6 +168,27 @@ The first version joined the runs in the order pdf.js returned them. That is dra
 
 **Cost:** rules have limits: tables, three columns or text drawn as images are not read correctly. The import says so, and every field stays editable.
 
-## 15. Container hardening
+## 15. Page breaks by moving blocks, measured on the real page
+
+**Decision:** before a PDF is captured (and on every preview redraw), `paginate()` walks the page's blocks top to bottom: section headings with their first line, entry headers with their first bullet, bullets, paragraphs, letter paragraphs and side cards. A block that would cross a page edge, or sit in the top or bottom margin of a later page, gets a larger top margin so it starts on the next page.
+
+| Option | Verdict |
+|---|---|
+| Cut the bitmap at fixed heights (first version) | Splits lines of text across pages |
+| CSS `break-inside: avoid` | Only applies when the browser prints or paginates; the PDF here is captured from one tall page |
+| Lay out every page separately | Would need the templates to be split into page-sized pieces; two-column templates make that very hard |
+| **Measure, then move blocks down** (chosen) | Uses the browser's real layout; works for every template and both columns independently; the same code drives the preview, so it shows the PDF's pages |
+
+**Cost:** the spacing is added as inline margins on the rendered page; while a block is being typed in, its spacing is removed (so Enter does not copy it) and restored when typing ends.
+
+## 16. A photo is its own image in the PDF
+
+**Decision:** the photo is cut out of the page bitmap and stored as a small JPEG laid over the page image; the area under it is filled with one colour before the page is encoded.
+
+A photo needs the full 256-colour palette (with fewer, skin tones show bands), which made every page with a photo about 20% larger. Stored separately, the photo costs about 15 KB and the page keeps its 48-colour palette. Measured on a dense two-page CV with a photo: 584 KB before, 490 KB after.
+
+**Cost:** none visible. The remaining size of a dense multi-page CV comes from the sharp edges of a lot of text in a bitmap (see decision 4); real vector text would be the fix.
+
+## 17. Container hardening
 
 nginx runs from the unprivileged image as uid 101 on a read-only filesystem with all capabilities dropped. The server only reads files, so it is given the ability to do nothing else. A Content-Security-Policy limits scripts to the site itself and cdnjs. The browser tests run against the container in CI specifically to prove the policy does not break PDF export or import.

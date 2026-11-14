@@ -47,6 +47,7 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `tools.js` | ATS checker and job matcher views | yes |
 | | `preview.js` | Scales A4 pages to fit their container | yes |
 | Services | `pdf-export.js` | Builds a PDF from a document | yes (off-screen render) |
+| | `paginate.js` | Moves blocks a page break would cut to the next page | yes (measures the rendered page) |
 | | `importer.js` | Reads PDF/TXT files: positioned PDF text → reading order (columns, bold, gaps) → a structured CV | no (pdf.js only) |
 | | `richtext.js` | Converts pasted HTML and the in-page editors' DOM to stored text (letter markup, bullet lines); bold/heading toggles | yes |
 | | `platform.js` | Loads CDN libraries (pinned + integrity hash); saves files; detects the host | yes |
@@ -58,14 +59,14 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `templates.js` | Renders a document to an HTML string; escaping | no |
 | | `data.js` | Document shapes, defaults, validation (`normalizeDoc`), samples | no |
 
-The core layer is plain JavaScript with no browser APIs, which is why the 141 unit tests run in Node without a browser or any test library.
+The core layer is plain JavaScript with no browser APIs, which is why the 142 unit tests run in Node without a browser or any test library.
 
 ```mermaid
 flowchart TD
     app --> editor & tools & preview & importer & store
     editor --> pdfexport[pdf-export] & richtext & analysis & preview & store & platform & ui & history & photo
     tools --> analysis & importer & store & ui
-    pdfexport --> platform & templates
+    pdfexport --> platform & templates & paginate
     importer --> platform & data
     platform --> ui
     ui --> templates
@@ -98,6 +99,8 @@ The 14 templates are rows in one table (`TEMPLATES`). Each row names a layout (`
 One `localStorage` entry holds `{ schema, docs, deleted }`. Every save is read–merge–write so that two open tabs do not overwrite each other. Details are in [concurrency.md](concurrency.md).
 
 ### Editor (`editor.js`)
+The editable page takes exactly the space of the printed one, so the preview shows the PDF's pages: "+ Add" buttons float over the page, an empty optional line (company note, details, bullets) appears only while its entry is being edited, and a section with nothing in it is offered below the page ("Add a section") instead of being drawn empty. `paginate()` runs on every redraw, and dashed lines mark where each page ends.
+
 The page is the editor. `renderDoc(doc, { editable: true })` draws the same page as the PDF, with three additions that exist only in the live preview:
 
 - **Text fields**: every piece of text is a `contenteditable` element carrying the path of the value it edits (`data-edit-field="experience.0.role"`). Bullet lists and paragraphs that allow bold use `data-edit-lines` and are read back with `editableToLines()`.
@@ -134,7 +137,7 @@ Not covered: a browser extension or another script running on the same origin ca
 
 These are deliberate trade-offs or open items, listed so a reviewer does not have to find them.
 
-1. **A long CV is cut into pages wherever the page height falls**, which can split a line or a card between two pages; there are no page-break rules and no page numbers. (The text layer places a split line on the page its baseline falls on, so its words are not lost.)
+1. **Page breaks keep blocks whole, but there are no page numbers or repeated headers.** A block taller than a page (a very long paragraph) can still be split inside. Backgrounds that fill a column (Modern, Studio) are drawn for the first page only.
 1. **PDF import is rule-based.** It reads layouts like the ones this app produces and common one- and two-column CVs; unusual layouts (tables, text in images, three columns) still need fixing by hand after import.
 1. **The PDF is an image with a text layer, not vector text.** Zooming far in shows pixels (192 dpi). See design-rationale.md for why.
 2. **PDF export and PDF import need the CDN.** Offline, the editor works but those two features report that the library could not be loaded.

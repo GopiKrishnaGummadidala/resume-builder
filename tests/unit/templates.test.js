@@ -343,16 +343,26 @@ describe('editing on the page', () => {
     }
   });
 
-  test('an empty CV offers every section while editing, and prints none of them', () => {
+  test('an empty section is not drawn on the page, while editing or printed', () => {
     for (const t of TEMPLATES) {
       const blank = blankResume(t.id);
       blank.personal = Object.fromEntries(Object.keys(blank.personal).map(k => [k, '']));
-      const editable = renderResume(blank, { editable: true });
-      for (const sec of ['experience', 'education', 'projects', 'achievements', 'skills', 'languages', 'certifications', 'interests']) {
-        assert.ok(editable.includes(`data-sec="${sec}"`), `${t.id}: ${sec}`);
-        assert.equal(renderResume(blank).includes(`data-sec="${sec}"`), false, `${t.id}: ${sec} printed`);
+      for (const html of [renderResume(blank, { editable: true }), renderResume(blank)]) {
+        for (const sec of ['experience', 'education', 'projects', 'achievements', 'skills', 'languages', 'certifications', 'interests']) {
+          assert.equal(html.includes(`data-sec="${sec}"`), false, `${t.id}: ${sec}`);
+        }
       }
     }
+  });
+
+  test('empty optional lines are marked, so they show only while their entry is edited', () => {
+    const r = sampleResume('classic');
+    r.experience[1].about = '';
+    r.experience[1].bullets = '';
+    const html = renderResume(r, { editable: true });
+    assert.match(html, /<p class="r-about ed-opt">[^]*?data-edit-field="experience.1.about"/);
+    assert.match(html, /<ul class="l-lines ed-opt"[^>]*data-edit-lines="experience.1.bullets"/);
+    assert.match(html, /<p class="r-about">[^]*?data-edit-field="experience.0.about"/, 'a filled line is always shown');
   });
 
   test('move controls are disabled at the ends of a list', () => {

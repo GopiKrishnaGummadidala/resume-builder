@@ -288,9 +288,12 @@ ul.l-lines > li:only-child:empty::before { content: 'Achievement: what you did a
 .ed-pencil:hover, .ed-pencil:focus-visible { opacity: 1; }
 .r-h .ed-pencil { float: right; }
 .r-side > .ed-pencil { display: block; margin: 8px 0 0; }
-.ed-add { display: block; width: 100%; margin-top: 6px; padding: 6px 10px; border-radius: 8px; border: 1px dashed #b6bdc9; background: transparent; color: #64748b; text-align: center; opacity: .75; }
+/* "+ Add" floats just below its section while the section is pointed at or edited, so it takes no space on the page. */
+.r-sec { position: relative; }
+.ed-add { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 2; margin-top: 2px; padding: 5px 10px; border-radius: 8px; border: 1px dashed #b6bdc9; background: #fff; color: #64748b; text-align: center; box-shadow: 0 2px 8px rgba(15, 18, 32, .12); }
+.r-sec:hover .ed-add, .r-sec:focus-within .ed-add { display: block; }
+/* An empty optional line (company note, details, bullets) shows only while its entry is being edited. */
+.r-item:not(:focus-within) .ed-opt { display: none; }
 .ed-add::before { content: '+ ' attr(data-label); }
-.ed-add:hover, .ed-add:focus-visible { opacity: 1; border-color: var(--accent); color: var(--accent); }
+.ed-add:hover, .ed-add:focus-visible { border-color: var(--accent); color: var(--accent); }
 /* On a coloured sidebar or header the controls keep their own light surface */
-.tpl-modern .r-side .ed-add { color: #fff; border-color: rgba(255, 255, 255, .6); }
-.tpl-modern .r-side .ed-add:hover { color: #fff; border-color: #fff; }

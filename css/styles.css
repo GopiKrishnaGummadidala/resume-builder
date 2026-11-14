@@ -346,3 +346,10 @@ select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; ba
 .photo-pick { cursor: pointer; }
 .photo-pick:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Page breaks in the live preview (where each PDF page ends) */
+.page-break { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed #94a3b8; pointer-events: none; z-index: 3; }
+.page-break::after { content: attr(data-label); position: absolute; right: 6px; top: 2px; padding: 1px 6px; border-radius: 4px; background: #94a3b8; color: #fff; font: 600 11px/1.4 system-ui, sans-serif; }
+/* Sections not on the page yet, offered below it */
+.add-sections { max-width: 816px; margin: 12px auto 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+.add-sections:empty { display: none; }

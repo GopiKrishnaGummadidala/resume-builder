@@ -660,6 +660,7 @@ test.describe('editing on the page', () => {
   test('entries are added, moved and removed from the page', async ({ page }) => {
     await newCv(page);
     const exp = live(page).locator('[data-sec="experience"]');
+    await exp.hover(); // "+ Add" shows while the section is pointed at
     await exp.getByRole('button', { name: 'Add position' }).click();
     await expect(onPage(page, 'experience.2.role')).toBeFocused();
     await page.keyboard.type('Intern');
@@ -683,7 +684,8 @@ test.describe('editing on the page', () => {
     await retype(page, onPage(page, 'personal.name'), 'Ada Lovelace');
     await onPage(page, 'summary').click();
     await page.keyboard.type('Engineer who builds reliable billing systems.');
-    await live(page).getByRole('button', { name: 'Add position' }).click();
+    await page.locator('.add-sections').getByRole('button', { name: '+ Experience' }).click();
+    await expect(onPage(page, 'experience.0.role')).toBeFocused();
     await page.keyboard.type('Engineer');
     await live(page).locator('[data-edit-lines="experience.0.bullets"]').click();
     await page.keyboard.type('Rebuilt invoicing');
@@ -812,5 +814,91 @@ test.describe('importing a PDF with a photo', () => {
     expect(result.photo).toBe('data:image/jpeg;base64,');
     expect(result.ownName).toBe('Jordan Rivera');
     expect(result.ownPhoto).toBe('');
+  });
+});
+
+test.describe('page breaks', () => {
+  /** A CV long enough for several pages: the sample with every position repeated. */
+  const longCv = () => {
+    const extra = Array.from({ length: 5 }, (_, i) => ({
+      id: `extra${i}abc`, role: `Designer ${i + 1}`, company: 'Studio Nine', location: 'Austin, TX', about: '', start: '2010', end: '2012',
+      bullets: Array.from({ length: 5 }, (__, j) => `Delivered project ${j + 1} of a long list that wraps onto a second line to make each bullet taller than one line`).join('\n'),
+    }));
+    return extra;
+  };
+
+  test('no line, bullet or entry header is cut by a page break, in the preview or the PDF', async ({ page }) => {
+    await newCv(page);
+    const extra = longCv();
+    const pageCount = await page.evaluate(async items => {
+      const { store } = await import('/js/store.js');
+      const doc = store.get(location.hash.replace('#edit-', ''));
+      doc.experience.push(...items);
+      store.update(doc);
+      return 0;
+    }, extra);
+    expect(pageCount).toBe(0);
+    await page.reload();
+    await expect(page.locator('.overflow-warn')).toContainText(/^\d pages in the PDF/);
+    expect(await page.locator('#live .page-break').count()).toBeGreaterThan(0);
+
+    // Every block in the live preview sits fully on one page, outside the page margins.
+    const cut = await page.evaluate(() => {
+      const pageEl = document.querySelector('#live .page');
+      const scale = pageEl.getBoundingClientRect().height / pageEl.offsetHeight;
+      const top = pageEl.getBoundingClientRect().top;
+      const H = pageEl.offsetWidth === 816 ? 1056 : 1123;
+      return [...pageEl.querySelectorAll('li, .r-row, .r-p, .r-h')].filter(el => {
+        const r = el.getBoundingClientRect();
+        const a = (r.top - top) / scale, b = (r.bottom - top) / scale;
+        return r.height && Math.floor(a / H) !== Math.floor((b - 1) / H);
+      }).map(el => el.textContent.slice(0, 40));
+    });
+    expect(cut).toEqual([]);
+
+    // The PDF: its text comes back whole, on the expected number of pages.
+    const pdf = await page.evaluate(async () => {
+      const { store } = await import('/js/store.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      const { fileToText } = await import('/js/importer.js');
+      const { blob, pages } = await buildPdf(store.get(location.hash.replace('#edit-', '')), document.querySelector('#print-area'));
+      return { pages, text: (await fileToText(new File([blob], 'cv.pdf', { type: 'application/pdf' }))).replace(/\s+/g, ' ') };
+    });
+    const shown = Number((await page.locator('.overflow-warn').textContent()).match(/^(\d)/)[1]);
+    expect(pdf.pages).toBe(shown);
+    expect(pdf.text.split('Delivered project 5 of a long list that wraps onto a second line').length - 1).toBe(5);
+  });
+
+  test('typing Enter in a bullet that was moved to a new page does not copy the page gap', async ({ page }) => {
+    await newCv(page);
+    // Mark a bullet the way paginate() marks a block it moved to the next page.
+    const bullet = live(page).locator('[data-edit-lines="experience.1.bullets"] li').first();
+    await bullet.evaluate(li => { li.setAttribute('data-pb', '-'); li.style.marginTop = '120px'; });
+    await bullet.click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Added');
+    const gaps = await live(page).locator('[data-edit-lines="experience.1.bullets"] li').evaluateAll(lis => lis.map(li => li.style.marginTop));
+    expect(gaps.every(g => g === '')).toBe(true);
+  });
+
+  test('a photo does not make the PDF large', async ({ page }) => {
+    const kb = await page.evaluate(async () => {
+      const { sampleResume } = await import('/js/data.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      const c = document.createElement('canvas');
+      c.width = c.height = 320;
+      const ctx = c.getContext('2d');
+      const g = ctx.createRadialGradient(160, 140, 10, 160, 160, 220); // smooth tones, like skin
+      g.addColorStop(0, '#f1c7a1'); g.addColorStop(0.6, '#a8714a'); g.addColorStop(1, '#2b1d14');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 320, 320);
+      const cv = sampleResume('signature');
+      cv.personal.photo = c.toDataURL('image/jpeg', 0.85);
+      const withPhoto = (await buildPdf(cv, document.querySelector('#print-area'))).blob.size;
+      cv.personal.photo = '';
+      const without = (await buildPdf(cv, document.querySelector('#print-area'))).blob.size;
+      return { withPhoto: withPhoto / 1024, without: without / 1024 };
+    });
+    expect(kb.withPhoto - kb.without, `photo adds ${(kb.withPhoto - kb.without).toFixed(0)} KB`).toBeLessThan(40);
   });
 });

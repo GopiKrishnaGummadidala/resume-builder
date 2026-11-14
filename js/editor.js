@@ -3,7 +3,7 @@
 // same in-memory document; every change is saved through the store.
 import {
   draftLetterBody, THEME_COLORS, FONTS, uid, splitLines, DEFAULT_PERSONAL, LETTER_TITLE, letterTitle,
-  PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, validPhoto,
+  PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, validPhoto, splitList,
 } from './data.js';
 import { store } from './store.js';
 import { TEMPLATES, renderDoc, esc, letterBlocks } from './templates.js';
@@ -14,6 +14,7 @@ import { saveFile } from './platform.js';
 import { buildPdf, pdfName } from './pdf-export.js';
 import { fitPages, pageObserver } from './preview.js';
 import { createHistory } from './history.js';
+import { paginate, unpaginate } from './paginate.js';
 import { fileToPhoto } from './photo.js';
 
 function field(label, path, doc, opts = {}) {
@@ -184,6 +185,19 @@ function toolbarMenus(doc) {
     </details>`;
 }
 
+/** Sections with nothing in them yet, offered below the page (an empty section is not drawn on it). */
+function addSections(doc) {
+  if (doc.type === 'cover') return '';
+  const lists = [['experience', 'Experience'], ['education', 'Education'], ['projects', 'Projects'], ['achievements', 'Achievements']]
+    .filter(([key]) => !doc[key]?.length)
+    .map(([key, label]) => `<button type="button" class="btn btn-sm btn-ghost" data-act="add-item" data-list="${key}">+ ${label}</button>`);
+  const panels = [['skills', 'skills', 'Skills'], ['extra', 'certifications', 'Certifications'], ['extra', 'languages', 'Languages'], ['interests', 'interests', 'Interests']]
+    .filter(([, path]) => !splitList(doc[path]).length)
+    .map(([group, path, label]) => `<button type="button" class="btn btn-sm btn-ghost" data-edit-open="${group}" data-edit-focus="${path}">+ ${label}</button>`);
+  const all = [...lists, ...panels];
+  return all.length ? `<span class="muted small">Add a section:</span>${all.join('')}` : '';
+}
+
 /** Which side panels are open. Remembered in this browser; both are closed the first time. */
 const PREFS_KEY = 'craftfolio.ui';
 const panels = { form: false, coach: false };
@@ -225,7 +239,8 @@ export function editorPage(id) {
       <div class="ed-preview">
         <p class="edit-tip no-print">Click any text on the page to edit it. ${doc.type === 'cover' ? 'Ctrl+B for bold.' : 'Use + to add an entry and ✎ for contact details, photo and skills.'}</p>
         <div class="page-fit" id="live">${renderDoc(doc, { editable: true })}</div>
-        <p class="overflow-warn" hidden>Content runs past one page — it will continue on page 2 in the PDF.</p>
+        <p class="overflow-warn" hidden></p>
+        <div class="add-sections no-print"></div>
       </div>
       <aside class="ed-coach no-print" id="coach" ${panels.coach ? '' : 'hidden'}>${coachPanel(doc)}</aside>
     </div>
@@ -242,8 +257,7 @@ export function mountEditor() {
   // Size, overflow warning and coach — everything except re-rendering the page itself.
   const updateAround = () => {
     fitPages(root);
-    const page = $('.page', live);
-    $('.overflow-warn', root).hidden = page.scrollHeight <= pageSize(doc).H + 2;
+    showPageBreaks();
     $('#coach').innerHTML = coachPanel(doc);
     $('#rail-score').textContent = $('#coach .ring span').textContent;
   };
@@ -265,8 +279,33 @@ export function mountEditor() {
     input?.focus();
     input?.scrollIntoView({ block: 'center' });
   };
+  // Dashed lines where each PDF page ends, and the page count under the preview.
+  function showPageBreaks() {
+    const page = $('.page', live);
+    const pageH = pageSize(doc).H;
+    const scale = page.getBoundingClientRect().height / page.offsetHeight || 1;
+    const pages = Math.max(1, Math.ceil((page.scrollHeight - 2) / pageH));
+    $$('.page-break', live).forEach(mark => mark.remove());
+    for (let k = 1; k < pages; k++) {
+      const mark = document.createElement('div');
+      mark.className = 'page-break no-print';
+      mark.dataset.label = `Page ${k + 1}`;
+      mark.style.top = `${k * pageH * scale}px`;
+      live.appendChild(mark);
+    }
+    const warn = $('.overflow-warn', root);
+    warn.hidden = pages < 2;
+    warn.textContent = `${pages} pages in the PDF. Dashed lines show where each page ends; entries and lines are never cut in two.`;
+  }
   const refresh = () => {
     live.innerHTML = renderDoc(doc, { editable: true });
+    // Replaced only when it changes: leaving a text field redraws the page between the press and the
+    // release of a click, and a button replaced in that moment would never receive the click.
+    const strip = $('.add-sections', root);
+    const offered = addSections(doc);
+    if (strip.dataset.html !== offered) { strip.innerHTML = offered; strip.dataset.html = offered; }
+    fitPages(root);
+    paginate($('.page', live), pageSize(doc).H); // the preview shows the same page breaks as the PDF
     updateAround();
   };
   // Undo history. A snapshot is the whole document except its save time. Typing is recorded after a
@@ -370,6 +409,10 @@ export function mountEditor() {
   let lastEditor = null; // body textarea or in-page editor, whichever was used last (for the B / Heading buttons)
   const pageEditor = () => $('.l-edit', live);
   root.addEventListener('focusin', e => {
+    // While a block of text is typed in, its page-break spacing is taken out so that a new line made
+    // with Enter does not copy it. The page is laid out again when typing ends (focusout).
+    const typing = e.target.closest?.('[data-edit-lines], .l-edit');
+    if (typing && live.contains(typing)) unpaginate(typing);
     if (e.target === bodyBox()) lastEditor = e.target;
     else if (e.target.classList?.contains('l-edit')) {
       lastEditor = e.target;
@@ -437,7 +480,7 @@ export function mountEditor() {
     const text = e.clipboardData?.getData('text/plain') || '';
     if (text) document.execCommand('insertText', false, text);
   });
-  live.addEventListener('click', e => {
+  root.addEventListener('click', e => {
     const opener = e.target.closest?.('[data-edit-open]');
     if (!opener) return;
     refresh();
@@ -517,7 +560,7 @@ export function mountEditor() {
         education: { degree: '', school: '', location: '', start: '', end: '', details: '' },
         projects: { name: '', link: '', description: '' },
       }[list];
-      const fromPage = live.contains(b); // checked before the page is redrawn
+      const fromPage = live.contains(b) || !!b.closest('.add-sections'); // checked before the page is redrawn
       doc[list].push({ id: uid(), ...blank });
       rerenderForm();
       // Added from the page: start typing in the new entry straight away.

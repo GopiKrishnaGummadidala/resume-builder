@@ -1,7 +1,8 @@
 // PDF export, fully in the browser.
 //
 // How a PDF is built:
-//   1. Render the document off-screen at A4 size (the same renderer as the preview).
+//   1. Render the document off-screen at A4 size (the same renderer as the preview), and move blocks
+//      that a page break would cut to the next page (paginate.js).
 //   2. Capture it as a bitmap (html2canvas) so the PDF looks exactly like the preview, fonts included.
 //   3. Encode each page as an indexed-colour PNG (a small palette, lossless edges), which is far
 //      smaller than a JPEG for a page of text and keeps letters sharp. See docs/design-rationale.md.
@@ -9,7 +10,8 @@
 //      readable by applicant tracking systems.
 //   5. Add a clickable area over every link (email, website, LinkedIn, GitHub).
 import { renderDoc } from './templates.js';
-import { LETTER_TITLE, pageSize, validPhoto } from './data.js';
+import { LETTER_TITLE, pageSize } from './data.js';
+import { paginate } from './paginate.js';
 import { loadLib } from './platform.js';
 
 /** Encoding settings. `colors` is the palette size per page; `scale` is bitmap pixels per CSS pixel. */
@@ -96,6 +98,32 @@ function addLinks(pdf, page, pageCssH, ptPerPx) {
   });
 }
 
+/**
+ * Photographs on the page, each cut out of the page bitmap as its own small JPEG. The page image
+ * keeps its small palette (a photo would need the full 256 colours, and still band in skin tones),
+ * and the photo is laid over it in the PDF. The area under each photo is filled with the colour at
+ * its corner, so the page image compresses well there.
+ * @returns {{x: number, y: number, w: number, h: number, fill: string, jpeg: string}[]} in bitmap pixels
+ */
+function cutOutPhotos(page, canvas, opts) {
+  const origin = page.getBoundingClientRect();
+  const pad = 4; // CSS px around the photo: its border and shadow
+  return [...page.querySelectorAll('img.r-photo')].map(img => {
+    const r = img.getBoundingClientRect();
+    const x = Math.max(0, Math.floor((r.left - origin.left - pad) * opts.scale));
+    const y = Math.max(0, Math.floor((r.top - origin.top - pad) * opts.scale));
+    const w = Math.min(canvas.width - x, Math.ceil((r.width + 2 * pad) * opts.scale));
+    const h = Math.min(canvas.height - y, Math.ceil((r.height + 2 * pad) * opts.scale));
+    const cut = document.createElement('canvas');
+    cut.width = w;
+    cut.height = h;
+    const ctx = cut.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
+    const [red, green, blue] = ctx.getImageData(0, 0, 1, 1).data;
+    return { x, y, w, h, fill: `rgb(${red},${green},${blue})`, jpeg: cut.toDataURL('image/jpeg', 0.85) };
+  }).filter(p => p.w > 0 && p.h > 0);
+}
+
 /** Encode one page bitmap. Returns { data, format } for jsPDF.addImage. */
 async function encodePage(canvas, opts) {
   if (opts.encoder === 'indexed') {
@@ -112,9 +140,7 @@ async function encodePage(canvas, opts) {
  * Resolves { blob, pages }. Throws with a readable message when a library cannot be loaded.
  */
 export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
-  // A photo needs the full 256-colour palette; 48 colours would show bands in skin tones.
-  const photo = validPhoto(doc.personal?.photo) ? { colors: 256 } : {};
-  const opts = { ...PDF_DEFAULTS, ...photo, ...overrides };
+  const opts = { ...PDF_DEFAULTS, ...overrides };
   const size = pageSize(doc);
   const html2canvas = await loadLib('html2canvas');
   const { jsPDF } = await loadLib('jspdf');
@@ -124,6 +150,7 @@ export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
   try {
     await document.fonts.ready;
     const page = area.querySelector('.page');
+    paginate(page, size.H); // page breaks fall between blocks, never through a line
     const fullH = Math.max(page.scrollHeight, size.H);
     const canvas = await html2canvas(page, {
       scale: opts.scale, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, logging: false,
@@ -132,7 +159,9 @@ export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
     const pdf = new jsPDF({ unit: 'pt', format: size.pdf, compress: true });
     pdf.setProperties({ title, author: doc.personal?.name || '', creator: 'Craftfolio' });
     const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    const ptPerBitmapPx = pw / canvas.width;
     const sliceH = Math.floor(canvas.width * (ph / pw)); // bitmap rows per PDF page
+    const photos = opts.encoder === 'indexed' ? cutOutPhotos(page, canvas, opts) : [];
     let pages = 0;
     for (let y = 0; y < canvas.height - 4; y += sliceH, pages++) {
       const part = document.createElement('canvas');
@@ -140,9 +169,12 @@ export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
       part.height = Math.min(sliceH, canvas.height - y);
       const ctx = part.getContext('2d', { willReadFrequently: true });
       ctx.drawImage(canvas, 0, y, canvas.width, part.height, 0, 0, canvas.width, part.height);
+      const onThisPage = photos.filter(p => p.y >= y && p.y < y + part.height);
+      onThisPage.forEach(p => { ctx.fillStyle = p.fill; ctx.fillRect(p.x, p.y - y, p.w, p.h); });
       const img = await encodePage(part, opts);
       if (pages) pdf.addPage();
-      pdf.addImage(img.data, img.format, 0, 0, pw, part.height * (pw / canvas.width), undefined, 'FAST');
+      pdf.addImage(img.data, img.format, 0, 0, pw, part.height * ptPerBitmapPx, undefined, 'FAST');
+      onThisPage.forEach(p => pdf.addImage(p.jpeg, 'JPEG', p.x * ptPerBitmapPx, (p.y - y) * ptPerBitmapPx, p.w * ptPerBitmapPx, p.h * ptPerBitmapPx));
     }
     addTextLayer(pdf, page, size.W * (ph / pw), pw / size.W);
     addLinks(pdf, page, size.W * (ph / pw), pw / size.W);

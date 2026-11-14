@@ -39,6 +39,7 @@ Then open http://localhost:5180. Any static file server works (for example `pyth
 - **ATS checker**: upload a PDF/TXT, paste text or pick a saved CV.
 - **Job matcher**: matched, close and missing keywords against a job advert.
 - **Import**: PDF, TXT, or a JSON export. Two-column PDFs are read column by column, and contact details, jobs (with dates, place and company note), bullets with bold, education, skills, certificates, languages, achievements and interests are filled in, and a profile photo placed in the PDF is imported too. A PDF downloaded from this app imports back into the same fields. Parsing is still best-effort: review the result.
+- **Page breaks**: a CV or letter longer than a page is split between entries, bullets and paragraphs, never through a line; later pages get a top margin. The preview shows dashed lines where each PDF page ends.
 - **Download PDF**: asks for a file name and downloads directly. About 160 KB for a full one-page letter, with selectable text and clickable email, website, LinkedIn and GitHub links.
 - **Letter names**: a cover letter is named "Cover Letter - <company>" from its "To" details, until you type a name yourself. The download uses the same name.
 - **Storage**: everything stays in `localStorage`, merged safely across open tabs; "Export JSON" for backups.
@@ -58,8 +59,8 @@ npm ci
 | Command | What it does |
 |---|---|
 | `npm run lint` | ESLint over the app, tests and scripts |
-| `npm test` | 141 unit tests (Node's built-in runner, no browser) |
-| `npm run test:e2e` | 46 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
+| `npm test` | 142 unit tests (Node's built-in runner, no browser) |
+| `npm run test:e2e` | 49 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
 | `npm run serve` | Static dev server on port 5180 |
 | `npm run load` | HTTP load test against the running container |
 | `node scripts/bench.mjs` | Timings for rendering, coaching, storage |
@@ -90,7 +91,8 @@ js/app.js             router; home, templates and documents views
 js/editor.js          editor: on-page editing, tool rail, form and coach panels
 js/tools.js           ATS checker and job matcher views
 js/preview.js         scales A4 pages to fit
-js/pdf-export.js      PDF: indexed PNG page image + invisible text layer
+js/pdf-export.js      PDF: indexed PNG page image + photo JPEG + invisible text layer
+js/paginate.js        page breaks that keep blocks whole
 js/importer.js        PDF/TXT import and résumé text parsing
 js/richtext.js        pasted HTML and in-page edits → letter markup
 js/platform.js        CDN libraries (pinned, integrity-checked), file saving

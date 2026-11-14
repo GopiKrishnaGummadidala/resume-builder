@@ -135,6 +135,10 @@ const SECTION_ICONS = {
  * add / move / remove / edit controls. Without it every helper returns plain output (or nothing), so
  * thumbnails and the PDF never contain an editor or a control.
  * Controls carry no text of their own (CSS draws their labels), so both renders hold the same words.
+ *
+ * The editable page takes the same space as the printed one, so the preview shows the PDF's pages:
+ * controls float over the page, an empty optional line (class ed-opt) shows only while its entry is
+ * being edited, and an empty section is not drawn (the editor offers it below the page instead).
  */
 function editing(on) {
   if (!on) {
@@ -146,7 +150,7 @@ function editing(on) {
         const lines = splitLines(text);
         return lines.length ? `<ul>${lines.map(b => `<li>${inline(b)}</li>`).join('')}</ul>` : '';
       },
-      ctl: () => '', add: () => '', pencil: () => '', empty: () => '',
+      ctl: () => '', add: () => '', pencil: () => '',
     };
   }
   const box = label => `spellcheck="true" role="textbox" aria-label="${esc(label)}"`;
@@ -165,7 +169,7 @@ function editing(on) {
     /** A bullet list, one line of the stored text per bullet. Always drawn, so there is somewhere to type. */
     bullets: (path, text) => {
       const label = 'Achievements, one per line';
-      return `<ul class="l-lines" contenteditable="true" aria-multiline="true" ${box(label)} data-edit-lines="${esc(path)}" data-placeholder="${label}">${
+      return `<ul class="l-lines${splitLines(text).length ? '' : ' ed-opt'}" contenteditable="true" aria-multiline="true" ${box(label)} data-edit-lines="${esc(path)}" data-placeholder="${label}">${
         splitLines(text).map(b => `<li>${inline(b)}</li>`).join('') || '<li></li>'}</ul>`; // an empty bullet to type in
     },
     /** Move up / move down / remove, for item `i` of a list of `len`. */
@@ -177,7 +181,6 @@ function editing(on) {
     add: (list, label) => button('ed-add', `data-act="add-item" data-list="${list}"`, label),
     /** Opens the details panel at a field, for content that is not typed on the page (contact, photo, skills). */
     pencil: (group, path, label) => button('ed-btn ed-pencil', `data-edit-open="${group}" data-edit-focus="${path}"`, label),
-    empty: (group, path, label) => button('ed-add', `data-edit-open="${group}" data-edit-focus="${path}"`, label),
   };
 }
 const PLAIN = editing(false);
@@ -192,12 +195,15 @@ function section(title, inner, { pencil = '', after = '' } = {}) {
   const icon = SECTION_ICONS[title] ? `<span class="r-ico" aria-hidden="true"><svg viewBox="0 0 24 24">${SECTION_ICONS[title]}</svg></span>` : '';
   return `<section class="r-sec" data-sec="${title.toLowerCase()}"><h3 class="r-h">${icon}<span>${esc(title)}</span>${pencil}</h3><div class="r-body">${inner}${after}</div></section>`;
 }
-/** A section whose content is edited in the details panel: a pencil in the heading, "+ Add" when empty. */
+/** A section whose content is edited in the details panel: a pencil in its heading while editing. */
 function panelSection(E, title, inner, group, path) {
-  if (!E.on) return section(title, inner);
-  const what = title.toLowerCase();
-  return section(title, inner, { pencil: E.pencil(group, path, `Edit ${what}`), after: inner ? '' : E.empty(group, path, `Add ${what}`) });
+  if (!E.on || !inner) return section(title, inner);
+  return section(title, inner, { pencil: E.pencil(group, path, `Edit ${title.toLowerCase()}`) });
 }
+/** The entries of a list section followed by its "+ Add" control; nothing at all for an empty list. */
+const withAdd = (items, E, list, label) => (items ? items + E.add(list, label) : '');
+/** Class for an optional line: hidden while it is empty and its entry is not being edited. */
+const opt = (E, value) => (E.on && !value ? ' ed-opt' : '');
 
 /** Round profile photo, or '' when the document has none. Only embedded images are ever drawn. */
 const photoHtml = p => (validPhoto(p.photo) ? `<img class="r-photo" src="${esc(p.photo)}" alt="">` : '');
@@ -207,54 +213,58 @@ const period = (E, at, e) => (E.on ? `${E.f(`${at}.start`, e.start, 'Start')} â€
 
 function experienceHtml(r, E) {
   const n = r.experience.length;
-  return r.experience
+  const items = r.experience
     .map((e, i) => {
       const at = `experience.${i}`;
       return `<div class="r-item">${E.ctl('experience', i, n)}
         <div class="r-row"><strong>${E.on ? E.f(`${at}.role`, e.role, 'Job title') : esc(e.role) || 'Role'}</strong><span class="r-date">${period(E, at, e)}</span></div>
         <div class="r-row r-sub"><span>${E.f(`${at}.company`, e.company, 'Company')}</span><span>${E.f(`${at}.location`, e.location, 'Location')}</span></div>
-        ${e.about || E.on ? `<p class="r-about">${E.f(`${at}.about`, e.about, 'About the company (optional)')}</p>` : ''}
+        ${e.about || E.on ? `<p class="r-about${opt(E, e.about)}">${E.f(`${at}.about`, e.about, 'About the company (optional)')}</p>` : ''}
         ${E.bullets(`${at}.bullets`, e.bullets)}
       </div>`;
     })
-    .join('') + E.add('experience', 'Add position');
+    .join('');
+  return withAdd(items, E, 'experience', 'Add position');
 }
 
 function educationHtml(r, E) {
   const n = r.education.length;
-  return r.education
+  const items = r.education
     .map((e, i) => {
       const at = `education.${i}`;
       return `<div class="r-item">${E.ctl('education', i, n)}
         <div class="r-row"><strong>${E.on ? E.f(`${at}.degree`, e.degree, 'Degree') : esc(e.degree) || 'Degree'}</strong><span class="r-date">${period(E, at, e)}</span></div>
         <div class="r-row r-sub"><span>${E.f(`${at}.school`, e.school, 'School')}</span><span>${E.f(`${at}.location`, e.location, 'Location')}</span></div>
-        ${e.details || E.on ? `<p class="r-p">${E.f(`${at}.details`, e.details, 'Details (optional)')}</p>` : ''}
+        ${e.details || E.on ? `<p class="r-p${opt(E, e.details)}">${E.f(`${at}.details`, e.details, 'Details (optional)')}</p>` : ''}
       </div>`;
     })
-    .join('') + E.add('education', 'Add education');
+    .join('');
+  return withAdd(items, E, 'education', 'Add education');
 }
 
 function projectsHtml(r, E) {
   const n = r.projects.length;
-  return r.projects
+  const items = r.projects
     .map((p, i) => {
       const at = `projects.${i}`;
       return `<div class="r-item">${E.ctl('projects', i, n)}<div class="r-row"><strong>${E.f(`${at}.name`, p.name, 'Project name')}</strong><span class="r-date">${E.f(`${at}.link`, p.link, 'Link')}</span></div>
-      ${p.description || E.on ? `<p class="r-p">${E.f(`${at}.description`, p.description, 'What it is and what came of it')}</p>` : ''}</div>`;
+      ${p.description || E.on ? `<p class="r-p${opt(E, p.description)}">${E.f(`${at}.description`, p.description, 'What it is and what came of it')}</p>` : ''}</div>`;
     })
-    .join('') + E.add('projects', 'Add project');
+    .join('');
+  return withAdd(items, E, 'projects', 'Add project');
 }
 
 function achievementsHtml(r, E) {
   const all = r.achievements || [];
-  return all
+  const items = all
     .map((a, i) => {
       if (!E.on && !a.title && !a.description) return ''; // an untouched entry is not printed
       const at = `achievements.${i}`;
       return `<div class="r-item">${E.ctl('achievements', i, all.length)}<div class="r-row"><strong>${E.f(`${at}.title`, a.title, 'Achievement')}</strong><span class="r-date">${E.f(`${at}.date`, a.date, 'Date')}</span></div>
-      ${a.description || E.on ? `<p class="r-p">${E.para(`${at}.description`, a.description, 'What you did and the result')}</p>` : ''}</div>`;
+      ${a.description || E.on ? `<p class="r-p${opt(E, a.description)}">${E.para(`${at}.description`, a.description, 'What you did and the result')}</p>` : ''}</div>`;
     })
-    .join('') + E.add('achievements', 'Add achievement');
+    .join('');
+  return withAdd(items, E, 'achievements', 'Add achievement');
 }
 
 const SUMMARY_HINT = 'Summary: who you are, your strongest results, what you want next';
