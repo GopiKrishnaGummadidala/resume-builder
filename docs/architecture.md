@@ -47,7 +47,7 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `tools.js` | ATS checker and job matcher views | yes |
 | | `preview.js` | Scales A4 pages to fit their container | yes |
 | Services | `pdf-export.js` | Builds a PDF from a document | yes (off-screen render) |
-| | `importer.js` | Reads PDF/TXT files; turns résumé text into a structured CV | no (pdf.js only) |
+| | `importer.js` | Reads PDF/TXT files: positioned PDF text → reading order (columns, bold, gaps) → a structured CV | no (pdf.js only) |
 | | `richtext.js` | Converts pasted HTML and the in-page editors' DOM to stored text (letter markup, bullet lines); bold/heading toggles | yes |
 | | `platform.js` | Loads CDN libraries (pinned + integrity hash); saves files; detects the host | yes |
 | | `photo.js` | Crops an uploaded image to a square and shrinks it to a 320 px JPEG | yes (canvas) |
@@ -58,7 +58,7 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `templates.js` | Renders a document to an HTML string; escaping | no |
 | | `data.js` | Document shapes, defaults, validation (`normalizeDoc`), samples | no |
 
-The core layer is plain JavaScript with no browser APIs, which is why the 124 unit tests run in Node without a browser or any test library.
+The core layer is plain JavaScript with no browser APIs, which is why the 138 unit tests run in Node without a browser or any test library.
 
 ```mermaid
 flowchart TD
@@ -134,7 +134,8 @@ Not covered: a browser extension or another script running on the same origin ca
 
 These are deliberate trade-offs or open items, listed so a reviewer does not have to find them.
 
-1. **A long CV is cut into pages wherever the page height falls**, which can split a line or a card between two pages; there are no page-break rules and no page numbers.
+1. **A long CV is cut into pages wherever the page height falls**, which can split a line or a card between two pages; there are no page-break rules and no page numbers. (The text layer places a split line on the page its baseline falls on, so its words are not lost.)
+1. **PDF import is rule-based.** It reads layouts like the ones this app produces and common one- and two-column CVs; unusual layouts (tables, text in images, three columns) still need fixing by hand after import.
 1. **The PDF is an image with a text layer, not vector text.** Zooming far in shows pixels (192 dpi). See design-rationale.md for why.
 2. **PDF export and PDF import need the CDN.** Offline, the editor works but those two features report that the library could not be loaded.
 3. **Whole-document last-write-wins.** Two tabs editing the *same* document at the same time: the later save wins; fields are not merged.

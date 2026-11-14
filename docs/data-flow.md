@@ -102,10 +102,16 @@ The merge rules are in [concurrency.md](concurrency.md).
 | Source | Path |
 |---|---|
 | JSON export | `JSON.parse` → `normalizeDoc()` → new id → `store.add()` |
-| PDF | pdf.js (from the CDN, main thread) extracts text → `parseResumeText()` finds contact details and sections by heading → `store.add()` |
+| PDF | pdf.js (from the CDN, main thread) gives positioned text runs and font names → `itemsToText()` rebuilds reading order → `parseResumeText()` → `store.add()` |
 | TXT | `file.text()` → `parseResumeText()` → `store.add()` |
 
-Parsing free text is best-effort and the app says so after an import. Files are read in the browser; they are never uploaded.
+Files are read in the browser; they are never uploaded.
+
+**Reading order (`itemsToText`).** pdf.js returns runs of text with a position, a size and a font, in drawing order, which is not reading order. The runs are grouped into lines by baseline. Everything above the first section heading is the page header and is read as one block. Below it, the page is checked for a column gutter: an empty vertical band that almost no line crosses, with lines of their own on both sides. Right-aligned dates are not a column (they share baselines with the job title, or sit just left of the real gutter), and a narrow column of section titles is a side-heading layout, read as one column. With a gutter, the main column is read before the side column. Runs in a bold font become `**bold**`, a wide gap inside a line becomes a tab, and a gap between lines larger than the usual spacing becomes a blank line.
+
+**Fields (`parseResumeText`).** The text is cut into sections at recognised headings. In the header, each part is classed as a contact detail (email, phone, web address, bare profile handle, "City, Country") or text; the first text that reads like a name is the name, the next short line the headline, the rest the summary. Jobs are anchored on their date lines: the lines above are the title, employer and a company note, or, when the title shares the date's line, the line below is "Employer<TAB>Place". Bullets are split at markers, else at blank lines, else at sentence ends. Certificates, languages and achievements are split at their date lines or bold titles.
+
+Parsing is best-effort and the app says so after an import. A PDF exported by the app writes an invisible "- " before each list item, so a re-import (or a copy of the text) keeps the bullets apart.
 
 ## Exporting a PDF
 

@@ -373,3 +373,16 @@ describe('editing on the page', () => {
     }
   });
 });
+
+describe('section structure', () => {
+  test('a section is its heading and one content wrapper, so grid layouts keep every entry together', () => {
+    for (const t of TEMPLATES) {
+      for (const editable of [false, true]) {
+        const html = renderResume(sampleResume(t.id), { editable });
+        const sections = html.match(/<section class="r-sec"[^>]*>[\s\S]*?<\/h3>(<div class="r-body">)?/g) || [];
+        assert.ok(sections.length >= 5, t.id);
+        for (const s of sections) assert.ok(s.endsWith('<div class="r-body">'), `${t.id}: ${s.slice(0, 60)}`);
+      }
+    }
+  });
+});

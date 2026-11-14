@@ -21,9 +21,21 @@ export const latin1 = s => s
   .replace(/[\u201c\u201d\u201e\u2033]/g, '"')   // double quotes
   .replace(/[\u2013\u2014\u2212]/g, '-')          // dashes, minus
   .replace(/\u2026/g, '...')                         // ellipsis
-  .replace(/[\u2022\u00b7\u25aa\u25cf]/g, '-')    // bullets
+  .replace(/[\u2022\u25aa\u25cf]/g, '-')          // bullets (the middle dot \u00b7 is Latin-1 and kept)
   .replace(/\u00a0/g, ' ')                           // non-breaking space
   .replace(/[^\x20-\xff]/g, '');
+
+/**
+ * Select the PDF page that a baseline at `y` (CSS px from the top of the document) falls on, and
+ * return the baseline's position on that page. Chosen by the baseline, not the top of the text, so a
+ * line that straddles a page break is never written below the bottom edge of a page (where readers
+ * drop it).
+ */
+function onPage(pdf, y, pageCssH) {
+  const pageNo = Math.min(Math.max(0, Math.floor(y / pageCssH)), pdf.getNumberOfPages() - 1);
+  pdf.setPage(pageNo + 1);
+  return y - pageNo * pageCssH;
+}
 
 /** Invisible text over the page image, one word at a time, at the position it has on screen. */
 function addTextLayer(pdf, page, pageCssH, ptPerPx) {
@@ -33,7 +45,21 @@ function addTextLayer(pdf, page, pageCssH, ptPerPx) {
   });
   const range = document.createRange();
   pdf.setFont('helvetica', 'normal');
+  const marked = new Set(); // list items whose bullet has been written
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const li = node.parentElement.closest('li');
+    if (li && !marked.has(li) && getComputedStyle(li).listStyleType !== 'none') {
+      // The bullet is drawn by CSS and is not text; write one so the PDF's text keeps the list
+      // (copying the text, or importing the PDF again, then shows where each bullet starts).
+      marked.add(li);
+      range.selectNodeContents(node);
+      const r = range.getClientRects()[0];
+      if (r) {
+        const baseline = onPage(pdf, r.top - origin.top + r.height * 0.78, pageCssH);
+        pdf.setFontSize(Math.max(4, r.height * 0.75 * ptPerPx));
+        pdf.text('- ', (r.left - origin.left - 10) * ptPerPx, baseline * ptPerPx, { renderingMode: 'invisible' });
+      }
+    }
     const upper = getComputedStyle(node.parentElement).textTransform === 'uppercase';
     for (const m of node.nodeValue.matchAll(/\S+/g)) {
       range.setStart(node, m.index);
@@ -42,10 +68,7 @@ function addTextLayer(pdf, page, pageCssH, ptPerPx) {
       if (!r.width || !r.height) continue;
       const word = latin1(upper ? m[0].toUpperCase() : m[0]);
       if (!word) continue;
-      const top = r.top - origin.top;
-      const pageNo = Math.floor(top / pageCssH);
-      const baseline = top - pageNo * pageCssH + r.height * 0.78;
-      pdf.setPage(pageNo + 1);
+      const baseline = onPage(pdf, r.top - origin.top + r.height * 0.78, pageCssH);
       pdf.setFontSize(Math.max(4, r.height * 0.75 * ptPerPx));
       // Stretch the word to its on-screen width so selections line up with the picture.
       const natural = pdf.getTextWidth(word);
@@ -66,10 +89,9 @@ function addLinks(pdf, page, pageCssH, ptPerPx) {
     if (!/^(https?|mailto):/i.test(a.href)) return;
     for (const r of a.getClientRects()) {
       if (!r.width || !r.height) continue;
-      const top = r.top - origin.top;
-      const pageNo = Math.floor(top / pageCssH);
-      pdf.setPage(pageNo + 1);
-      pdf.link((r.left - origin.left) * ptPerPx, (top - pageNo * pageCssH) * ptPerPx, r.width * ptPerPx, r.height * ptPerPx, { url: a.href });
+      const baseline = onPage(pdf, r.top - origin.top + r.height * 0.78, pageCssH);
+      const top = baseline - r.height * 0.78;
+      pdf.link((r.left - origin.left) * ptPerPx, top * ptPerPx, r.width * ptPerPx, r.height * ptPerPx, { url: a.href });
     }
   });
 }

@@ -154,6 +154,20 @@ Language level dots are computed from the wording of the detail when the page is
 
 **Cost:** no manual crop; the centre square is used.
 
-## 14. Container hardening
+## 14. PDF import reads the layout, not just the text
+
+**Decision:** import works from the positions pdf.js reports for each run of text, and rebuilds reading order before any parsing.
+
+The first version joined the runs in the order pdf.js returned them. That is drawing order: on a two-column CV every line of the side column was interleaved with the main column ("Software Engineer" next to "Angular React Next.js"), so sections, jobs and skills came out mixed. Detecting the gutter from the positions, then reading each column on its own, fixes this without guessing from words. Bold comes from the font name, which keeps highlighted phrases in bullets and lets bold job titles and certificate names mark where an entry starts.
+
+| Option | Verdict |
+|---|---|
+| Text in pdf.js order (first version) | Interleaves columns; unusable for two-column CVs |
+| An AI or cloud parsing service | Better on odd layouts, but sends the CV off the device (decision 1) |
+| **Layout reconstruction, then rules** (chosen) | Local, deterministic, unit-testable with made-up layouts; handles this app's 14 templates and common one- and two-column CVs |
+
+**Cost:** rules have limits: tables, three columns or text drawn as images are not read correctly. The import says so, and every field stays editable.
+
+## 15. Container hardening
 
 nginx runs from the unprivileged image as uid 101 on a read-only filesystem with all capabilities dropped. The server only reads files, so it is given the ability to do nothing else. A Content-Security-Policy limits scripts to the site itself and cdnjs. The browser tests run against the container in CI specifically to prove the policy does not break PDF export or import.

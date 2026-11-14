@@ -190,7 +190,7 @@ const PLAIN = editing(false);
 function section(title, inner, { pencil = '', after = '' } = {}) {
   if (!inner && !after) return '';
   const icon = SECTION_ICONS[title] ? `<span class="r-ico" aria-hidden="true"><svg viewBox="0 0 24 24">${SECTION_ICONS[title]}</svg></span>` : '';
-  return `<section class="r-sec" data-sec="${title.toLowerCase()}"><h3 class="r-h">${icon}<span>${esc(title)}</span>${pencil}</h3>${inner}${after}</section>`;
+  return `<section class="r-sec" data-sec="${title.toLowerCase()}"><h3 class="r-h">${icon}<span>${esc(title)}</span>${pencil}</h3><div class="r-body">${inner}${after}</div></section>`;
 }
 /** A section whose content is edited in the details panel: a pencil in the heading, "+ Add" when empty. */
 function panelSection(E, title, inner, group, path) {

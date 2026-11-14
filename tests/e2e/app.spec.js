@@ -723,3 +723,64 @@ test.describe('editing on the page', () => {
     for (const word of ['Add position', 'Job title', 'Summary:', 'Add skills']) expect(text).not.toContain(word);
   });
 });
+
+test.describe('importing a PDF', () => {
+  /** Build a template's sample CV as a PDF, read it back, and parse it — all in the page. */
+  const roundTrip = (page, templateId) => page.evaluate(async id => {
+    const { sampleResume } = await import('/js/data.js');
+    const { buildPdf } = await import('/js/pdf-export.js');
+    const { fileToText, parseResumeText } = await import('/js/importer.js');
+    const { blob } = await buildPdf(sampleResume(id), document.querySelector('#print-area'));
+    return parseResumeText(await fileToText(new File([blob], 'cv.pdf', { type: 'application/pdf' })));
+  }, templateId);
+
+  test('a downloaded CV imports back into the same fields, in every template', async ({ page }) => {
+    test.setTimeout(120_000);
+    const ids = await page.evaluate(async () => (await import('/js/templates.js')).TEMPLATES.map(t => t.id));
+    for (const id of ids) {
+      const r = await roundTrip(page, id);
+      expect.soft(r.personal.name.toLowerCase(), id).toBe('jordan rivera');
+      expect.soft(r.personal.title.toLowerCase(), id).toBe('senior product designer');
+      expect.soft(r.personal.email, id).toBe('jordan.rivera@example.com');
+      expect.soft(r.experience.map(e => [e.role, e.company, e.start, e.end]), id).toEqual([
+        ['Senior Product Designer', 'Brightline Analytics', '2021', 'Present'],
+        ['Product Designer', 'Northwind Labs', '2018', '2021'],
+      ]);
+      expect.soft(r.experience[0].bullets.split('\n'), id).toContain('Led redesign of onboarding flow, increasing 7-day activation by 23%');
+      expect.soft(r.experience[1].bullets.split('\n').length, id).toBe(3);
+      expect.soft(r.education.map(e => e.degree), id).toEqual(['B.A. Interaction Design']);
+      expect.soft(r.skills.split(', '), id).toContain('Journey Mapping');
+      expect.soft(r.languages, id).toBe('English | Native\nSpanish | Professional working');
+      expect.soft(r.interests, id).toBe('Trail running, Letterpress printing');
+    }
+  });
+
+  test('the Import button turns a PDF into a CV and opens it', async ({ page }) => {
+    const pdf = await page.evaluate(async () => {
+      const { sampleResume } = await import('/js/data.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      const { blob } = await buildPdf(sampleResume('signature'), document.querySelector('#print-area'));
+      return [...new Uint8Array(await blob.arrayBuffer())];
+    });
+    await page.goto('/#documents');
+    await page.locator('input[data-act="import"]').first().setInputFiles({ name: 'cv.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdf) });
+    await expect(page.locator('.editor')).toBeVisible();
+    await expect(page.locator('.title-input')).toHaveValue('Jordan Rivera — imported');
+    await expect(live(page).locator('[data-edit-field="experience.1.company"]')).toHaveText('Northwind Labs');
+    await expect(live(page).locator('[data-edit-field="experience.0.about"]')).toHaveText('Analytics platform for mid-size retailers · 300 employees');
+  });
+
+  test('a line that falls across a page break stays in the PDF text', async ({ page }) => {
+    const text = await page.evaluate(async () => {
+      const { sampleResume } = await import('/js/data.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      const { fileToText } = await import('/js/importer.js');
+      const r = sampleResume('classic');
+      r.interests = 'Chess'; // in this template the sample ends right on the page edge
+      const { blob, pages } = await buildPdf(r, document.querySelector('#print-area'));
+      return { pages, text: await fileToText(new File([blob], 'cv.pdf', { type: 'application/pdf' })) };
+    });
+    expect(text.pages).toBe(2);
+    expect(text.text).toContain('Chess');
+  });
+});
