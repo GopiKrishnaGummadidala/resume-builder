@@ -19,7 +19,7 @@ const BLOCKS = [
 ];
 
 /** Top and bottom page margins (CSS px) used after a page break. */
-export const BREAK_MARGINS = Object.freeze({ top: 40, bottom: 28 });
+export const BREAK_MARGINS = Object.freeze({ top: 22, bottom: 26 });
 
 const PUSHED = 'data-pb';
 
@@ -29,6 +29,24 @@ export function unpaginate(root) {
     el.style.marginTop = el.getAttribute(PUSHED) === '-' ? '' : el.getAttribute(PUSHED);
     el.removeAttribute(PUSHED);
   });
+  root.querySelectorAll('.page-no, .r-h-cont').forEach(added => added.remove());
+  if (root.matches?.('[data-page-numbers]')) root.style.minHeight = '';
+}
+
+/**
+ * "Page 1 of 2" at the foot of every page, for templates that ask for it (data-page-numbers). The
+ * page is made a whole number of pages tall so the last footer sits at the foot of the last page.
+ */
+function numberPages(page, pageH, pages) {
+  if (pages < 2) return;
+  page.style.minHeight = `${pages * pageH}px`;
+  for (let k = 1; k <= pages; k++) {
+    const no = document.createElement('div');
+    no.className = 'page-no';
+    no.textContent = `Page ${k} of ${pages}`;
+    no.style.top = `${k * pageH - 22}px`;
+    page.appendChild(no);
+  }
 }
 
 /**
@@ -58,12 +76,26 @@ export function paginate(page, pageH, { top = BREAK_MARGINS.top, bottom = BREAK_
     for (let b = pageH; b - bottom < span.bottom; b += pageH) {
       if (span.top >= b + top) continue;
       if (span.bottom > b - bottom) {
-        push(el, b + top - span.top);
+        // An entry that continues a section on a new page gets the section's heading repeated above it.
+        const heading = el.matches('.r-item') && el.previousElementSibling?.matches('.r-item')
+          && el.closest('.r-sec')?.querySelector(':scope > .r-h');
+        if (heading) {
+          const copy = heading.cloneNode(true);
+          copy.classList.add('r-h-cont');
+          copy.setAttribute('aria-hidden', 'true');
+          copy.querySelectorAll('button').forEach(button => button.remove());
+          el.before(copy);
+          push(copy, b + top - box(copy).top, box);
+        } else {
+          push(el, b + top - span.top, box);
+        }
         break;
       }
     }
   }
-  return Math.max(1, Math.ceil((page.scrollHeight - 2) / pageH));
+  const pages = Math.max(1, Math.ceil((page.scrollHeight - 2) / pageH));
+  if (page.hasAttribute('data-page-numbers')) numberPages(page, pageH, pages);
+  return pages;
 }
 
 /**
@@ -85,10 +117,19 @@ function extent(el, box) {
   return own;
 }
 
-function push(el, by) {
+/**
+ * Move `el` down by `by` px. A top margin can merge with the bottom margin of the block above it
+ * (margin collapsing), so the move is measured and corrected until the block is where it should be.
+ */
+function push(el, by, box) {
   if (by <= 0) return;
   const target = el.matches('.r-sec > .r-h') ? el.parentElement : el;
   if (!target.hasAttribute(PUSHED)) target.setAttribute(PUSHED, target.style.marginTop || '-');
-  const current = parseFloat(getComputedStyle(target).marginTop) || 0;
-  target.style.marginTop = `${current + by}px`;
+  const goal = box(el).top + by;
+  for (let i = 0; i < 4; i++) {
+    const missing = goal - box(el).top;
+    if (missing < 0.5) break;
+    const current = parseFloat(getComputedStyle(target).marginTop) || 0;
+    target.style.marginTop = `${current + missing}px`;
+  }
 }

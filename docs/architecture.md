@@ -59,7 +59,7 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `templates.js` | Renders a document to an HTML string; escaping | no |
 | | `data.js` | Document shapes, defaults, validation (`normalizeDoc`), samples | no |
 
-The core layer is plain JavaScript with no browser APIs, which is why the 142 unit tests run in Node without a browser or any test library.
+The core layer is plain JavaScript with no browser APIs, which is why the 145 unit tests run in Node without a browser or any test library.
 
 ```mermaid
 flowchart TD
@@ -137,7 +137,7 @@ Not covered: a browser extension or another script running on the same origin ca
 
 These are deliberate trade-offs or open items, listed so a reviewer does not have to find them.
 
-1. **Page breaks keep blocks whole, but there are no page numbers or repeated headers.** A block taller than a page (a very long paragraph) can still be split inside. Backgrounds that fill a column (Modern, Studio) are drawn for the first page only.
+1. **Page breaks keep blocks whole; headings repeat and pages are numbered only where a template asks for it** (Signature). A block taller than a page (a very long paragraph) can still be split inside. Backgrounds that fill a column (Modern, Studio) are drawn for the first page only.
 1. **PDF import is rule-based.** It reads layouts like the ones this app produces and common one- and two-column CVs; unusual layouts (tables, text in images, three columns) still need fixing by hand after import.
 1. **The PDF is an image with a text layer, not vector text.** Zooming far in shows pixels (192 dpi). See design-rationale.md for why.
 2. **PDF export and PDF import need the CDN.** Offline, the editor works but those two features report that the library could not be loaded.

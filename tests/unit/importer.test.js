@@ -204,3 +204,12 @@ describe('parseResumeText details', () => {
     assert.equal(r.achievements[0].description, 'Built **ssh-customize**, a shared framework.');
   });
 });
+
+describe('summary', () => {
+  test('bold phrases in the summary are kept, in the header and under a heading', () => {
+    const inHeader = parseResumeText('**Sam Lee**\nData Engineer\n**Data engineer** with ten years in\n**analytics** platforms.\nsam@example.com');
+    assert.equal(inHeader.summary, '**Data engineer** with ten years in **analytics** platforms.');
+    const underHeading = parseResumeText('Sam Lee\n\nSummary\nBuilt **streaming** pipelines.');
+    assert.equal(underHeading.summary, 'Built **streaming** pipelines.');
+  });
+});

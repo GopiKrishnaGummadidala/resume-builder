@@ -225,7 +225,7 @@ const joinNatural = a => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', 
 export function resumeToText(r) {
   const p = r.personal;
   const lines = [p.name, p.title, [p.email, p.phone, p.location, p.website, p.linkedin, p.github].filter(Boolean).join(' | ')];
-  if (r.summary) lines.push('', 'SUMMARY', r.summary);
+  if (r.summary) lines.push('', 'SUMMARY', r.summary.replace(/\*\*/g, ''));
   if (r.experience.length) {
     lines.push('', 'EXPERIENCE');
     r.experience.forEach(e => {

@@ -223,42 +223,100 @@
 .r-e-d { font-style: italic; }
 .r-level { display: none; }
 
-/* Signature: the Profile layout with a career line, and a card per topic in the right column */
-.tpl-signature { padding: 15px 15px 36px; color: #000; font-size: 9pt; line-height: calc(1.38 + (var(--sp) - 1) * .35); }
-.tpl-signature .p-cols { display: grid; grid-template-columns: 1fr 236px; gap: 18px; margin-top: 18px; align-items: start; }
+/* Signature. Sizes are in pt, the unit of a printed page: 1pt here is one point in the PDF.
+   Header: photo, then name and headline on white; the summary in a dark band; contact details in a
+   band of the accent colour. Body: work experience on the left; a grey side panel on the right. */
+.tpl-signature { --ink: #313c4e; padding: 11pt 11pt 30pt; color: #000; font-size: 9pt; line-height: calc(12pt + (var(--sp) - 1) * 4pt); }
+.tpl-signature.page { position: relative; }
+
+/* Header */
+.s-head { position: relative; }
+.s-id { padding: 5pt 11pt 6pt; }
+.s-head.has-photo .s-id { padding-left: 117pt; }
+.s-head .r-name { font-size: 16pt; font-weight: 700; line-height: 1.3; color: var(--ink); letter-spacing: 0; }
+.s-head .r-title { font-size: 11pt; font-weight: 400; line-height: 1.3; color: var(--accent); margin-top: 0; }
+.s-band { background: var(--ink); color: #fff; border-radius: 8pt 8pt 0 0; padding: 3pt 11pt 8pt; min-height: 22pt; }
+.s-head.has-photo .s-band { padding-left: 117pt; }
+.s-band .b-summary { font-size: 9pt; line-height: 12pt; color: #fff; margin: 0 !important; }
+.s-band .b-summary strong { font-weight: 700; }
+.s-head .r-photo { position: absolute; z-index: 1; left: 13.5pt; top: 5pt; width: 89pt; height: 89pt; margin: 0;
+  border: 2.2pt solid var(--accent); box-shadow: 0 0 0 2pt var(--ink); }
+.s-head .b-contact { background: var(--accent); border-radius: 0 0 8pt 8pt; padding: 7pt 20pt 9pt; gap: 10pt 16pt; font-size: 8pt; line-height: 11pt; color: #fff; }
+.s-head .b-ci { gap: 5pt; }
+.s-head .b-ci svg { width: 12pt; height: 12pt; stroke-width: 1.4; }
+
+/* Columns */
+.tpl-signature .b-body { padding: 0; }
+.tpl-signature .p-cols { display: grid; grid-template-columns: 1fr 175pt; gap: 12pt; margin-top: 12pt; align-items: start; }
 .tpl-signature .p-cols > .r-main:only-child { grid-column: 1 / -1; }
-.tpl-signature .r-main .r-sec:first-child { margin-top: 0; }
-.tpl-signature .r-h { display: flex; align-items: center; gap: 9px; color: #313c4e; font-size: 11.5pt; letter-spacing: .03em; margin-bottom: 9px; }
-.tpl-signature .r-ico { display: inline-flex; width: 26px; height: 26px; padding: 5px; border-radius: 50%; background: #313c4e; color: #fff; flex-shrink: 0; }
-/* Career line: a rail down the experience list with a marker at each role */
-.tpl-signature [data-sec="experience"] .r-item { position: relative; margin-left: 12px; padding: 0 0 calc(12px * var(--sp)) 18px; margin-bottom: 0; border-left: 2px solid #d5dae2; }
-.tpl-signature [data-sec="experience"] .r-item:last-child { border-left-color: transparent; padding-bottom: 0; }
-.tpl-signature [data-sec="experience"] .r-item::before { content: ''; position: absolute; left: -7px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--accent); }
-.tpl-signature .r-row strong { font-size: 11pt; color: #111827; }
-.tpl-signature .r-sub { font-style: normal; color: #111827; font-size: 10.2pt; }
-.tpl-signature .r-date { color: var(--accent); font-style: italic; font-weight: 600; }
-.tpl-signature .r-main li strong { color: #111827; }
-/* Right column: one card per section */
-.tpl-signature .r-side { display: grid; gap: calc(12px * var(--sp)); }
-.tpl-signature .r-side .r-sec { margin-top: 0; background: #f3f4f6; border-radius: 10px; padding: 13px 13px 12px; border-top: 3px solid var(--accent); }
-.tpl-signature .r-side .r-h { font-size: 10.5pt; margin-bottom: 8px; }
-.tpl-signature .r-side .r-ico { width: 22px; height: 22px; padding: 4px; }
-.tpl-signature .r-chips { gap: 5px; }
-.tpl-signature .r-chips span { background: #313c4e; border: 0; color: #fff; font-weight: 500; font-size: 8.4pt; padding: 2px 7px; }
-.tpl-signature .r-side .r-item { margin-bottom: calc(9px * var(--sp)); }
-.tpl-signature .r-side .r-item:last-child { margin-bottom: 0; }
-.tpl-signature .r-side .r-row { flex-direction: column; gap: 0; }
-.tpl-signature .r-side .r-row strong { font-size: 10pt; }
-.tpl-signature .r-side .r-date { font-size: 8.8pt; }
-.tpl-signature .r-side .r-p { font-size: 8.6pt; color: #374151; }
-.tpl-signature .r-entries li { margin-bottom: 8px; }
+.tpl-signature .r-main { padding: 6pt 0 0 11pt; }
+.tpl-signature .r-main .r-sec:first-child, .tpl-signature .r-side .r-sec:first-child { margin-top: 0; }
+
+/* Section titles: a dark round icon and the title in capitals */
+.tpl-signature .r-h { display: flex; align-items: center; gap: 4.5pt; margin: 0 0 9pt; color: var(--ink); font-size: 11pt; font-weight: 700; line-height: 20pt; letter-spacing: .01em; }
+.tpl-signature .r-ico { display: inline-flex; width: 20pt; height: 20pt; padding: 4.5pt; border-radius: 50%; background: var(--ink); color: #fff; flex-shrink: 0; }
+.tpl-signature .r-ico svg { stroke-width: 1.5; }
+.tpl-signature .r-sec { margin-top: 10pt; }
+
+/* Work experience: title, employer, company note, "dates | place", then the achievements */
+.tpl-signature [data-sec="experience"] .r-item {
+  display: grid; grid-template-columns: auto auto 1fr; margin-bottom: 14pt;
+  grid-template-areas: "role role role" "co co co" "about about about" "date place ." "list list list";
+}
+.tpl-signature [data-sec="experience"] .r-row { display: contents; }
+.tpl-signature .r-sub { font-style: normal; color: #000; }
+.tpl-signature [data-sec="experience"] .r-row > strong { grid-area: role; font-size: 10pt; line-height: 13.5pt; font-weight: 700; color: #000; }
+.tpl-signature [data-sec="experience"] .r-sub > span:first-child { grid-area: co; font-size: 10pt; line-height: 13.5pt; }
+.tpl-signature [data-sec="experience"] .r-sub > span:last-child { grid-area: place; font-size: 9pt; line-height: 12pt; }
+.tpl-signature [data-sec="experience"] .r-sub > span:last-child:not(:empty)::before { content: '|'; margin: 0 5pt 0 4pt; font-size: 8pt; color: #3b3b3b; }
+.tpl-signature [data-sec="experience"] .r-date { grid-area: date; font-size: 9pt; line-height: 12pt; color: #000; font-style: normal; font-weight: 400; white-space: nowrap; }
+.tpl-signature [data-sec="experience"] .r-about { grid-area: about; font-size: 8.26pt; line-height: 11pt; color: #7f7f7f; font-style: italic; margin: 1pt 0 !important; }
+.tpl-signature [data-sec="experience"] .r-item > ul { grid-area: list; margin: 5pt 0 0; padding-left: 7.6pt; }
+.tpl-signature [data-sec="experience"] .r-item > ul::before { content: 'Achievements/Tasks'; display: block; margin: 0 0 1pt -7.6pt; font-size: 9pt; line-height: 12.5pt; font-weight: 700; color: var(--accent); }
+.tpl-signature [data-sec="experience"] li { margin: 0; line-height: 12pt; }
+.tpl-signature .r-main li::marker { color: var(--accent); font-size: 1.1em; }
+.tpl-signature .r-main li strong { font-weight: 700; color: #000; }
+
+/* Side panel: one light grey panel; a section moved to the next page starts a new panel there */
+.tpl-signature .r-side { display: block; }
+.tpl-signature .r-side .r-sec { margin: 0; background: #f4f4f4; padding: 10pt 8.5pt 9pt 9.6pt; }
+.tpl-signature .r-side .r-sec:first-child, .tpl-signature .r-side .r-sec[data-pb] { border-top-left-radius: 5pt; border-top-right-radius: 5pt; }
+/* Rounded where the panel starts and ends, also at a page break (set after the page is laid out, so no size changes) */
+.tpl-signature .r-side .r-sec:last-child, .tpl-signature .r-side .r-sec:has(+ .r-sec[data-pb]) { border-bottom-left-radius: 5pt; border-bottom-right-radius: 5pt; }
+.tpl-signature .r-side .r-sec:last-child { padding-bottom: 14pt; }
+.tpl-signature .r-chips { gap: 7pt 6pt; }
+.tpl-signature .r-chips span { background: #acb8ca; color: #000; border: 0; border-radius: 3pt; padding: 3pt 5pt; font-size: 9pt; line-height: 13pt; font-weight: 400; }
+
+/* Certificates and languages */
+.tpl-signature .r-entries li { display: flex; flex-direction: column; margin: 0 0 11pt; }
 .tpl-signature .r-entries li:last-child { margin-bottom: 0; }
-.tpl-signature .r-e-d { color: var(--accent); opacity: 1; }
-.tpl-signature .r-level { display: flex; gap: 4px; margin-top: 4px; }
-.tpl-signature .r-level i { width: 22px; height: 5px; border-radius: 3px; background: #d5dae2; }
-.tpl-signature .r-level i.on { background: var(--accent); }
-.tpl-signature [data-sec="interests"] ul { display: flex; flex-wrap: wrap; gap: 5px; }
-.tpl-signature [data-sec="interests"] li { margin: 0; border: 1px solid #313c4e; border-radius: 4px; padding: 2px 8px; font-size: 8.8pt; }
+.tpl-signature .r-e-t { font-size: 10pt; line-height: 13pt; font-weight: 700; color: #000; }
+.tpl-signature .r-e-s { font-size: 8.26pt; line-height: 11pt; font-style: italic; color: #7a7a7a; opacity: 1; }
+.tpl-signature .r-e-d { font-size: 9pt; line-height: 12pt; font-style: normal; color: #000; opacity: 1; }
+.tpl-signature [data-sec="languages"] .r-e-t { font-size: 9pt; line-height: 12pt; }
+.tpl-signature [data-sec="languages"] .r-e-s { color: var(--accent); }
+.tpl-signature [data-sec="languages"] li { margin-bottom: 8pt; }
+
+/* Education and achievements in the side panel: title, then the rest, the date last */
+.tpl-signature .r-side .r-item { display: grid; margin: 0 0 13pt; grid-template-areas: "role" "co" "desc" "date" "place"; }
+.tpl-signature .r-side .r-item:last-child { margin-bottom: 0; }
+.tpl-signature .r-side .r-row { display: contents; }
+.tpl-signature .r-side .r-row > strong { grid-area: role; font-size: 10pt; line-height: 13pt; font-weight: 700; color: #000; }
+.tpl-signature .r-side .r-sub > span:first-child { grid-area: co; font-size: 10pt; line-height: 13pt; }
+.tpl-signature .r-side .r-sub > span:last-child { grid-area: place; font-size: 9pt; line-height: 12pt; }
+.tpl-signature .r-side .r-date { grid-area: date; font-size: 9pt; line-height: 12pt; color: #000; font-style: normal; font-weight: 400; }
+.tpl-signature .r-side .r-p { grid-area: desc; font-size: 8.26pt; line-height: 11pt; font-style: italic; color: #7a7a7a; }
+.tpl-signature .r-side .r-p strong { font-weight: 700; }
+
+/* Interests: a small icon before each */
+.tpl-signature .r-interests li { display: flex; align-items: center; gap: 4pt; margin: 0 0 12pt; font-size: 9pt; line-height: 12pt; }
+.tpl-signature .r-interests li:last-child { margin-bottom: 0; }
+.tpl-signature .r-int-ico { display: inline-flex; width: 12pt; height: 12pt; color: var(--ink); flex-shrink: 0; }
+.tpl-signature .r-int-ico svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.r-int-ico { display: none; }
+
+/* "Page 1 of 2" (added by paginate() for templates that number their pages) */
+.page-no { position: absolute; right: 11pt; font-size: 8pt; line-height: 10pt; color: #666; }
 
 /* ===== Editing on the page (live preview only; thumbnails and the PDF use the plain render) ===== */
 .l-lines { outline: none; border-radius: 3px; cursor: text; transition: box-shadow .15s; }

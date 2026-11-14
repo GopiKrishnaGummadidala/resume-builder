@@ -181,6 +181,10 @@ The first version joined the runs in the order pdf.js returned them. That is dra
 
 **Cost:** the spacing is added as inline margins on the rendered page; while a block is being typed in, its spacing is removed (so Enter does not copy it) and restored when typing ends.
 
+### Signature follows the user's own CV
+
+Signature was rebuilt from measurements of a real two-page CV (font sizes, colours and positions read from its PDF): name and headline over a dark summary band with the photo overlapping it, a contact band below, work experience with company notes and "dates | place" lines, and one grey side panel. Everything it needs is expressed as data on the template row (`header: 'stacked'`, section `labels`, `dateSep`, `levels: false`, `pageNumbers`) plus CSS in pt, so the other templates are unchanged. The icons are drawn for this app in the same outline style; they are not copied from any other product.
+
 ## 16. A photo is its own image in the PDF
 
 **Decision:** the photo is cut out of the page bitmap and stored as a small JPEG laid over the page image; the area under it is filled with one colour before the page is encoded.

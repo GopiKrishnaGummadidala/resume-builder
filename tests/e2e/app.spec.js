@@ -560,8 +560,7 @@ test.describe('achievements, interests and entries with detail', () => {
     const side = live(page).locator('.r-side');
     await expect(side.locator('[data-sec="achievements"]')).toContainText('Load time');
     await expect(side.locator('[data-sec="achievements"] strong', { hasText: 'by 40%' })).toBeVisible();
-    await expect(side.locator('[data-sec="languages"] .r-level')).toHaveCount(2);
-    await expect(side.locator('[data-sec="languages"] .r-level i.on')).toHaveCount(5); // 4 + 1
+    await expect(side.locator('[data-sec="languages"] .r-e-s')).toHaveText(['Fluent', 'Elementary']); // written out, as in the template
     await expect(side.locator('[data-sec="certifications"]')).toContainText('Microsoft');
     await expect(live(page).locator('.r-about').first()).toHaveText('Shipping software · 120+ clients');
     expect(await page.evaluate(() => window.__x)).toBeUndefined();
@@ -682,7 +681,7 @@ test.describe('editing on the page', () => {
     await page.goto('/#documents');
     await page.locator('[data-act="new-resume"]').first().click();
     await retype(page, onPage(page, 'personal.name'), 'Ada Lovelace');
-    await onPage(page, 'summary').click();
+    await live(page).locator('[data-edit-lines="summary"]').click();
     await page.keyboard.type('Engineer who builds reliable billing systems.');
     await page.locator('.add-sections').getByRole('button', { name: '+ Experience' }).click();
     await expect(onPage(page, 'experience.0.role')).toBeFocused();
@@ -900,5 +899,36 @@ test.describe('page breaks', () => {
       return { withPhoto: withPhoto / 1024, without: without / 1024 };
     });
     expect(kb.withPhoto - kb.without, `photo adds ${(kb.withPhoto - kb.without).toFixed(0)} KB`).toBeLessThan(40);
+  });
+});
+
+test.describe('Signature on more than one page', () => {
+  test('numbers its pages and repeats a section heading where the section continues', async ({ page }) => {
+    await newCv(page);
+    await page.evaluate(async () => {
+      const { store } = await import('/js/store.js');
+      const doc = store.get(location.hash.replace('#edit-', ''));
+      doc.templateId = 'signature';
+      for (let i = 0; i < 4; i++) {
+        doc.experience.push({ id: `more${i}abcd`, role: `Designer ${i + 1}`, company: 'Studio Nine', location: 'Austin, TX', about: '', start: '2010', end: '2012',
+          bullets: Array.from({ length: 4 }, (_, j) => `Delivered project ${j + 1} of a long list that wraps onto a second line to make each bullet taller`).join('\n') });
+      }
+      store.update(doc);
+    });
+    await page.reload();
+    await expect(live(page).locator('.page-no')).toHaveText(['Page 1 of 2', 'Page 2 of 2']);
+    await expect(live(page).locator('.r-h-cont')).toHaveCount(1);
+    await expect(live(page).locator('.r-h-cont')).toContainText('Work experience');
+
+    const text = await page.evaluate(async () => {
+      const { store } = await import('/js/store.js');
+      const { buildPdf } = await import('/js/pdf-export.js');
+      const { fileToText } = await import('/js/importer.js');
+      const { blob } = await buildPdf(store.get(location.hash.replace('#edit-', '')), document.querySelector('#print-area'));
+      return (await fileToText(new File([blob], 'cv.pdf', { type: 'application/pdf' }))).replace(/\s+/g, ' ');
+    });
+    expect(text.toLowerCase().split('work experience').length - 1).toBe(2);
+    // The footers are left out of the text, so a re-import is not confused by them.
+    expect(text).not.toMatch(/Page \d of \d/);
   });
 });

@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderResume, renderLetter, renderDoc, letterBlocks, contactUrl, esc, TEMPLATES, PAGE } from '../../js/templates.js';
-import { sampleResume, sampleLetter, blankLetter, blankResume } from '../../js/data.js';
+import { sampleResume, sampleLetter, blankLetter, blankResume, resumeToText } from '../../js/data.js';
 
 const XSS = '<img src=x onerror=alert(1)>"\'&';
 
@@ -109,7 +109,7 @@ describe('renderResume', () => {
     for (const t of TEMPLATES) {
       const html = renderResume(sampleResume(t.id));
       assert.ok(html.startsWith(`<div class="page tpl-${t.id}"`), t.id);
-      for (const part of ['Jordan Rivera', 'Experience', 'Education', 'Skills', 'Brightline Analytics']) assert.ok(html.includes(part), `${t.id}: ${part}`);
+      for (const part of ['Jordan Rivera', 'experience', 'education', 'skills', 'Brightline Analytics']) assert.ok(html.toLowerCase().includes(part.toLowerCase()), `${t.id}: ${part}`);
     }
   });
 
@@ -184,7 +184,7 @@ describe('templates list', () => {
     assert.equal(new Set(TEMPLATES.map(t => t.id)).size, TEMPLATES.length);
     for (const t of TEMPLATES) {
       assert.ok(['single', 'side-left', 'side-right', 'profile'].includes(t.layout), t.id);
-      assert.ok(['plain', 'split', 'sidebar', 'banner'].includes(t.header), t.id);
+      assert.ok(['plain', 'split', 'sidebar', 'banner', 'stacked'].includes(t.header), t.id);
       assert.ok(['inline', 'chips', 'list'].includes(t.skills), t.id);
       assert.ok(t.name && t.desc && t.tags.length, t.id);
     }
@@ -292,15 +292,23 @@ describe('richer CV content', () => {
     }
   });
 
-  test('Signature puts education, certificates and language levels in the right column', () => {
+  test('Signature puts education, certificates, languages and interests in the right column', () => {
     const html = renderResume(sampleResume('signature'));
     const side = html.slice(html.indexOf('<aside class="r-side">'));
     for (const sec of ['skills', 'certifications', 'languages', 'education', 'achievements', 'interests']) assert.ok(side.includes(`data-sec="${sec}"`), sec);
     assert.equal(side.includes('data-sec="experience"'), false);
     assert.ok(side.includes('<span class="r-e-t">Nielsen Norman UX Certification</span><span class="r-e-s">NN/g</span><span class="r-e-d">2022</span>'));
-    assert.ok(side.includes('aria-label="Level 5 of 5"'), 'English | Native');
-    assert.ok(side.includes('aria-label="Level 3 of 5"'), 'Spanish | Professional working');
-    assert.equal((side.match(/class="on"/g) || []).length, 8);
+    assert.equal(side.includes('r-level'), false, 'languages are written out, not drawn as bars');
+    assert.match(side, /class="r-int-ico"[^]*Trail running/);
+    // Its own section titles, date style and page numbers.
+    assert.ok(html.includes('<span>Work experience</span>') && html.includes('<span>Certificates</span>'));
+    assert.ok(html.includes('2021 - Present'));
+    assert.ok(html.includes('data-page-numbers'));
+    // Profile draws language levels as bars.
+    const bars = renderResume(sampleResume('profile'));
+    assert.ok(bars.includes('aria-label="Level 5 of 5"'), 'English | Native');
+    assert.ok(bars.includes('aria-label="Level 3 of 5"'), 'Spanish | Professional working');
+    assert.equal((bars.slice(bars.indexOf('<aside')).match(/class="on"/g) || []).length, 8);
     // Profile keeps education in the main column.
     const profile = renderResume(sampleResume('profile'));
     assert.ok(profile.indexOf('data-sec="education"') < profile.indexOf('<aside class="r-side">'));
@@ -329,7 +337,7 @@ describe('editing on the page', () => {
 
   test('every text field of a CV is editable in place, in every template', () => {
     const paths = [
-      'personal.name', 'personal.title', 'summary',
+      'personal.name', 'personal.title',
       'experience.0.role', 'experience.0.company', 'experience.0.location', 'experience.0.about', 'experience.0.start', 'experience.0.end',
       'experience.1.role', 'education.0.degree', 'education.0.school', 'education.0.location', 'education.0.start', 'education.0.end', 'education.0.details',
       'projects.0.name', 'projects.0.link', 'projects.0.description', 'achievements.0.title', 'achievements.0.date',
@@ -337,7 +345,7 @@ describe('editing on the page', () => {
     for (const t of TEMPLATES) {
       const html = renderResume(sampleResume(t.id), { editable: true });
       for (const p of paths) assert.equal(html.split(`data-edit-field="${p}"`).length - 1, 1, `${t.id}: ${p}`);
-      for (const p of ['experience.0.bullets', 'experience.1.bullets', 'achievements.0.description']) assert.equal(html.split(`data-edit-lines="${p}"`).length - 1, 1, `${t.id}: ${p}`);
+      for (const p of ['summary', 'experience.0.bullets', 'experience.1.bullets', 'achievements.0.description']) assert.equal(html.split(`data-edit-lines="${p}"`).length - 1, 1, `${t.id}: ${p}`);
       for (const list of ['experience', 'education', 'projects', 'achievements']) assert.ok(html.includes(`data-act="add-item" data-list="${list}"`), `${t.id}: add ${list}`);
       for (const group of ['personal', 'skills', 'extra', 'interests']) assert.ok(html.includes(`data-edit-open="${group}"`), `${t.id}: open ${group}`);
     }
@@ -394,5 +402,26 @@ describe('section structure', () => {
         for (const s of sections) assert.ok(s.endsWith('<div class="r-body">'), `${t.id}: ${s.slice(0, 60)}`);
       }
     }
+  });
+});
+
+describe('Signature header', () => {
+  test('name and headline sit above a dark band that holds the summary, with bold kept', () => {
+    const r = sampleResume('signature');
+    r.summary = 'Designer with **seven years** of experience.';
+    const html = renderResume(r);
+    const head = html.slice(html.indexOf('<header class="s-head'), html.indexOf('</header>'));
+    assert.ok(head.indexOf('r-name') < head.indexOf('s-band'), 'name first');
+    assert.match(head, /<div class="s-band"><p class="b-summary">Designer with <strong>seven years<\/strong> of experience\.<\/p><\/div>/);
+    assert.ok(head.includes('b-contact'));
+    assert.equal(head.includes('r-photo'), false, 'no photo, no image');
+    r.personal.photo = 'data:image/jpeg;base64,/9j/4AAQ';
+    assert.match(renderResume(r), /<header class="s-head has-photo"><img class="r-photo"/);
+  });
+
+  test('a summary with bold reads as plain text in the text version of the CV', () => {
+    const r = sampleResume();
+    r.summary = 'Designer with **seven years** of experience.';
+    assert.ok(resumeToText(r).includes('Designer with seven years of experience.'));
   });
 });

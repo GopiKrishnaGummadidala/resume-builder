@@ -251,8 +251,11 @@ export function itemsToText(pages) {
     const headerBottom = headingRow ? below : crossing.length ? Math.min(...crossing.map(r => r.y)) : Infinity;
     const header = items.filter(it => it.y >= headerBottom - ROW_TOLERANCE);
     const body = items.filter(it => it.y < headerBottom - ROW_TOLERANCE);
-    main.push(...rowsToLines(toRows(header)), '', ...rowsToLines(toRows(body.filter(it => it.x + it.w / 2 < gutter.mid))), '');
-    side.push(...rowsToLines(toRows(body.filter(it => it.x + it.w / 2 >= gutter.mid))), '');
+    // Text that starts past the middle of the gutter is in the right column; text that starts before
+    // it is in the left one, even when it reaches into the gutter (a right-aligned link, say).
+    const isRight = it => it.x >= gutter.mid;
+    main.push(...rowsToLines(toRows(header)), '', ...rowsToLines(toRows(body.filter(it => !isRight(it)))), '');
+    side.push(...rowsToLines(toRows(body.filter(isRight))), '');
   });
   return [...main, ...side]
     .filter(l => !/^(\*\*)?page \d+( of \d+)?(\*\*)?$/i.test(l)) // page footers
@@ -360,11 +363,16 @@ function parseExperience(lines) {
     while (i - 1 > floor && taken < 5) {
       const l = lines[i - 1];
       if (l === '') {
-        if (!taken || bold) { i--; continue; } // spacing inside a bold-titled header
+        // Spacing inside the header: always fine above a bold title; without bold, only between
+        // short lines that could be a title, an employer or a company note.
+        const above = lines[i - 2] || '';
+        const headerLike = above && !BULLET.test(above) && !sentenceEnd(above) && plain(above).length < 90;
+        if (!taken || bold || (headerLike && taken < 3)) { i--; continue; }
         break;
       }
       if (BULLET.test(l) || LABEL.test(plain(l))) break;
-      if (!bold && (sentenceEnd(l) || taken >= 2)) break; // without bold: at most a role and a company, never a sentence
+      // Without bold: at most a title, an employer and a company note, never a sentence.
+      if (!bold && (sentenceEnd(l) || taken >= 3)) break;
       i--;
       taken++;
       if (bold && allBold(l)) break; // the job title
@@ -534,8 +542,11 @@ function parseHeader(lines, text, r) {
   const isHandle = p => /^[A-Za-z0-9][A-Za-z0-9-]{2,38}$/.test(p) && (/[-\d]/.test(p) || /^[a-z]/.test(p) || /[a-z][A-Z]/.test(p));
   const isContact = p => /@/.test(p) || /\+?\d[\d\s().-]{7,}\d/.test(p) || /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(p)
     || isPlace(p) || isHandle(p);
-  const parts = lines.filter(Boolean).flatMap(l => l.split(/\t|\s+[|•·]\s+/)).map(plain).filter(Boolean);
-  const words = parts.filter(p => !isContact(p));
+  // Each part keeps its bold markup (for the summary) next to its plain text (for everything else).
+  const raw = lines.filter(Boolean).flatMap(l => l.split(/\t|\s+[|•·]\s+/)).filter(p => plain(p));
+  const parts = raw.map(plain);
+  const wordAt = parts.map((p, i) => (isContact(p) ? -1 : i)).filter(i => i >= 0);
+  const words = wordAt.map(i => parts[i]);
   // The name: the first text that reads like one (a few capitalised words, no digits, not a sentence).
   const looksLikeName = p => /^\p{Lu}/u.test(p) && /\s/.test(p) && !/\d/.test(p) && p.split(/\s+/).length <= 5 && !sentenceEnd(p);
   const at = Math.max(0, words.findIndex(looksLikeName));
@@ -543,8 +554,8 @@ function parseHeader(lines, text, r) {
   const second = words[at + 1] || '';
   const hasTitle = second && second.length < 60 && !sentenceEnd(second);
   if (hasTitle) r.personal.title = second;
-  const summary = words.slice(at + (hasTitle ? 2 : 1));
-  if (summary.length) r.summary = plain(joinLines(summary));
+  const summary = wordAt.slice(at + (hasTitle ? 2 : 1)).map(i => raw[i]);
+  if (summary.length) r.summary = joinLines(summary); // bold phrases in the summary are kept
 
   // Contact details. A "City, Country" part is the location; bare handles (shown next to an icon,
   // without the site's name) are taken as LinkedIn (lower case with hyphens) or GitHub.
@@ -582,7 +593,7 @@ export function parseResumeText(text) {
   }
 
   parseHeader(buckets.header, String(text ?? ''), r);
-  if (buckets.summary) r.summary = plain(joinLines(buckets.summary.filter(Boolean)));
+  if (buckets.summary) r.summary = joinLines(buckets.summary.filter(Boolean)); // bold is kept
   if (buckets.experience) r.experience = parseExperience(buckets.experience).filter(e => e.role || e.company || e.bullets);
   if (buckets.education) r.education = parseEducation(buckets.education);
   if (buckets.skills) r.skills = [...new Set(listItems(buckets.skills))].join(', ');
