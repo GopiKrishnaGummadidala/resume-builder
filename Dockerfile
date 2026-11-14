@@ -4,6 +4,8 @@ FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY index.html artifact.html /usr/share/nginx/html/
 COPY css/ /usr/share/nginx/html/css/
+# Font files embedded in downloaded PDFs (SIL Open Font License, see fonts/*/OFL.txt).
+COPY fonts/ /usr/share/nginx/html/fonts/
 # Includes js/profile.local.js when it exists on the build machine (your default details).
 # That file is git-ignored, so images built in CI do not contain it.
 COPY js/ /usr/share/nginx/html/js/

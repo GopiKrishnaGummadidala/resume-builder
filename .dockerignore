@@ -1,4 +1,4 @@
-# Only index.html, artifact.html, css/, js/ and nginx.conf are needed in the image.
+# Only index.html, artifact.html, css/, js/, fonts/ and nginx.conf are needed in the image.
 .git
 .github
 .gitignore

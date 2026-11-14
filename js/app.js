@@ -108,14 +108,27 @@ function templatesPage(type) {
   </section>`;
 }
 
+let docTag = ''; // the tag My documents is filtered by ('' = all)
+
 function documentsPage() {
-  const docs = store.docs;
+  const all = store.docs;
+  const tags = [...new Set(all.flatMap(d => d.tags || []))].sort((a, b) => a.localeCompare(b));
+  if (docTag && !tags.includes(docTag)) docTag = '';
+  const docs = docTag ? all.filter(d => (d.tags || []).includes(docTag)) : all;
+  const count = t => all.filter(d => (d.tags || []).includes(t)).length;
+  const tagBar = tags.length
+    ? `<div class="chips doc-filter" role="group" aria-label="Filter by tag">
+        <button class="chip ${docTag ? '' : 'active'}" data-act="doc-tag" data-tag="" aria-pressed="${!docTag}">All <span class="chip-n">${all.length}</span></button>
+        ${tags.map(t => `<button class="chip ${t === docTag ? 'active' : ''}" data-act="doc-tag" data-tag="${esc(t)}" aria-pressed="${t === docTag}">${esc(t)} <span class="chip-n">${count(t)}</span></button>`).join('')}
+      </div>`
+    : '';
   const card = d => `<div class="doc-card">
     <a class="doc-thumb" href="#edit-${d.id}">${miniPreview(d)}</a>
     <div class="doc-meta">
       <span class="badge ${d.type === 'cover' ? 'badge-alt' : ''}">${d.type === 'cover' ? 'Cover letter' : 'CV'}</span>
       <h3 title="${esc(d.title)}">${esc(d.title)}</h3>
       <p class="muted">Edited ${timeAgo(d.updatedAt)}</p>
+      ${d.tags?.length ? `<div class="doc-tag-row">${d.tags.map(t => `<span class="doc-tag">${esc(t)}</span>`).join('')}</div>` : ''}
       <div class="doc-actions">
         <a class="btn btn-sm btn-primary" href="#edit-${d.id}">Edit</a>
         <button class="btn btn-sm btn-ghost" data-act="dup" data-id="${d.id}" title="Duplicate to tailor for another job">Duplicate</button>
@@ -133,6 +146,7 @@ function documentsPage() {
         <label class="btn btn-ghost">Import CV<input type="file" accept=".pdf,.txt,.json" data-act="import" hidden></label>
       </div>
     </div>
+    ${tagBar}
     ${docs.length ? `<div class="doc-grid">${docs.map(card).join('')}</div>` : `
       <div class="empty">
         <h3>No documents yet</h3>
@@ -157,6 +171,7 @@ document.addEventListener('click', e => {
   else if (act === 'samples') { store.add(sampleLetter()); store.add(sampleResume()); route(); }
   else if (act === 'dup') { store.duplicate(b.dataset.id); toast('Duplicated — rename it for the new job'); route(); }
   else if (act === 'filter') { tplFilter = b.dataset.filter; route(); }
+  else if (act === 'doc-tag') { docTag = b.dataset.tag; route(); }
   else if (act === 'del') {
     const d = store.get(b.dataset.id);
     confirmDialog(`Delete “${d?.title || 'this document'}”? This cannot be undone.`, 'Delete', true).then(ok => { if (ok) { store.remove(b.dataset.id); route(); } });

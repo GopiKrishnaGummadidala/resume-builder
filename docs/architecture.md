@@ -47,6 +47,7 @@ Each module has one job. Imports only point downwards in this table; a unit test
 | | `tools.js` | ATS checker and job matcher views | yes |
 | | `preview.js` | Scales A4 pages to fit their container | yes |
 | Services | `pdf-export.js` | Builds a PDF from a document | yes (off-screen render) |
+| | `pdf-text.js` | Writes the page's words as real text in the embedded font; bullets; keeps CSS decorations in the picture | yes (measures the rendered page) |
 | | `paginate.js` | Moves blocks a page break would cut to the next page | yes (measures the rendered page) |
 | | `importer.js` | Reads PDF/TXT files: positioned PDF text → reading order (columns, bold, gaps) → a structured CV | no (pdf.js only) |
 | | `richtext.js` | Converts pasted HTML and the in-page editors' DOM to stored text (letter markup, bullet lines); bold/heading toggles | yes |
@@ -64,6 +65,7 @@ The core layer is plain JavaScript with no browser APIs, which is why the 145 un
 ```mermaid
 flowchart TD
     app --> editor & tools & preview & importer & store
+    pdfexport --> pdftext[pdf-text]
     editor --> pdfexport[pdf-export] & richtext & analysis & preview & store & platform & ui & history & photo
     tools --> analysis & importer & store & ui
     pdfexport --> platform & templates & paginate
@@ -114,7 +116,7 @@ Typing on the page updates the in-memory document and the matching form input, b
 The toolbar has Layout, Fonts and Themes menus (native `<details>` elements) and undo/redo. Undo keeps up to 100 snapshots of the document as JSON (`history.js`). Typing is recorded after a half-second pause so one step is a phrase; other changes are recorded at once. History lives in memory for the open editor only.
 
 ### PDF export (`pdf-export.js`)
-Render the document off-screen → capture it as a bitmap → encode each page as an indexed-colour PNG → place invisible, word-positioned text on top. The result looks identical to the preview, the text can be selected and parsed, and a full one-page letter is about 160 KB. The reasoning and measurements are in [design-rationale.md](design-rationale.md).
+Render the document off-screen and paginate it → capture a picture of each page with all text transparent (backgrounds, bands, chips, icons) → encode it as an indexed-colour PNG, with the photo as its own JPEG clipped to its circle → write every word as real text in the embedded font, at the position, size, weight, colour and slant it has on screen. Bullets are written as "•" in their own colour. Decorations drawn by CSS ("|", "// ") and widely letter-spaced headings stay in the picture, the latter with an invisible normal-spaced copy, so an applicant tracking system reads words, not letters. Fonts without an embeddable file fall back to the picture-of-text mode with an invisible text layer. The reasoning and measurements are in [design-rationale.md](design-rationale.md).
 
 ## Security model
 
@@ -139,8 +141,8 @@ These are deliberate trade-offs or open items, listed so a reviewer does not hav
 
 1. **Page breaks keep blocks whole; headings repeat and pages are numbered only where a template asks for it** (Signature). A block taller than a page (a very long paragraph) can still be split inside. Backgrounds that fill a column (Modern, Studio) are drawn for the first page only.
 1. **PDF import is rule-based.** It reads layouts like the ones this app produces and common one- and two-column CVs; unusual layouts (tables, text in images, three columns) still need fixing by hand after import.
-1. **The PDF is an image with a text layer, not vector text.** Zooming far in shows pixels (192 dpi). See design-rationale.md for why.
-2. **PDF export and PDF import need the CDN.** Offline, the editor works but those two features report that the library could not be loaded.
+1. **Only Hind is embedded so far.** Documents in another font get a picture of the text with an invisible text layer: larger, and soft at high zoom. Each further font needs its OFL font files added to `fonts/` and `EMBEDDED_FONTS`.
+2. **PDF export and PDF import need the CDN** (the font files are served by the app itself). Offline, the editor works but those two features report that the library could not be loaded.
 3. **Whole-document last-write-wins.** Two tabs editing the *same* document at the same time: the later save wins; fields are not merged.
 4. **The documents view renders a real preview per document.** Fine for tens of documents; hundreds would be slow to draw.
 5. **`index.html` and `artifact.html` are two copies of the same markup.** A unit test keeps them identical.

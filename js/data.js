@@ -17,7 +17,7 @@ export const FONTS = [
 
 /** Template ids the model accepts. templates.js renders exactly these (enforced by a unit test). */
 export const TEMPLATE_IDS = [
-  'banner', 'profile', 'signature', 'classic', 'minimal', 'executive', 'tech', 'timeline', 'elegant', 'bold', 'corporate',
+  'banner', 'profile', 'signature', 'signature-one', 'horizon', 'classic', 'minimal', 'executive', 'tech', 'timeline', 'elegant', 'bold', 'corporate',
   'modern', 'studio', 'compact',
 ];
 export const DEFAULT_TEMPLATE = 'banner';
@@ -32,7 +32,7 @@ export const SPACING_STEPS = Object.freeze([0.6, 0.8, 1, 1.2, 1.4, 1.7, 2]);
 export const MARGIN_STEPS = Object.freeze([0.5, 0.7, 0.85, 1, 1.2, 1.4]);
 export const DEFAULT_SPACING = 3; // 1-based step: multiplier 1
 export const DEFAULT_MARGIN = 4;  // 1-based step: multiplier 1
-export const DEFAULT_THEME = () => ({ color: THEME_COLORS[0], font: 'hind', spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN, size: 'a4' });
+export const DEFAULT_THEME = () => ({ color: THEME_COLORS[0], font: 'hind', spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN, size: 'a4', icons: true, fullLinks: true, profileHeading: true });
 
 /** Size of a document's page; unknown or missing sizes fall back to A4. */
 export const pageSize = doc => (Object.hasOwn(PAGE_SIZES, doc?.theme?.size ?? '') ? PAGE_SIZES[doc.theme.size] : PAGE_SIZES.a4);
@@ -303,6 +303,38 @@ const list = (v, keys, longKeys = []) =>
     };
   });
 
+/** Most tags on one document, and the longest tag. */
+export const TAG_LIMITS = Object.freeze({ count: 8, length: 24 });
+
+/**
+ * A document's tags (".NET", "Node", "Angular"): labels for finding versions of a CV in My documents.
+ * Trimmed, whitespace and commas collapsed, no repeats (ignoring case), at most TAG_LIMITS.count.
+ */
+export function cleanTags(v) {
+  const out = [];
+  for (const t of Array.isArray(v) ? v : []) {
+    const tag = str(t, TAG_LIMITS.length * 2).replace(/[\s,]+/g, ' ').trim().slice(0, TAG_LIMITS.length).trim();
+    if (tag && out.length < TAG_LIMITS.count && !out.some(o => o.toLowerCase() === tag.toLowerCase())) out.push(tag);
+  }
+  return out;
+}
+
+/** CV sections the owner can reorder and, in two-column templates, move between the columns. */
+export const SECTION_KEYS = Object.freeze(['summary', 'experience', 'projects', 'education', 'skills', 'certifications', 'languages', 'achievements', 'interests']);
+
+/**
+ * A CV's own section arrangement, or undefined to follow the template. order: section keys in the
+ * owner's order; side (optional): the keys placed in the side column of two-column templates.
+ */
+export function cleanSections(v) {
+  const o = obj(v);
+  const keys = a => (Array.isArray(a) ? [...new Set(a.filter(k => SECTION_KEYS.includes(k)))] : null);
+  const order = keys(o.order);
+  if (!order?.length) return undefined;
+  const side = keys(o.side);
+  return side ? { order, side } : { order };
+}
+
 /** Return a clean copy of a CV or cover letter, or null if `raw` is not a document at all. */
 export function normalizeDoc(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -312,6 +344,7 @@ export function normalizeDoc(raw) {
     id: validId(raw.id) ? raw.id : uid(),
     type: raw.type === 'cover' ? 'cover' : 'resume',
     title: str(raw.title) || 'Untitled',
+    tags: cleanTags(raw.tags),
     updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : Date.now(),
     templateId: TEMPLATE_IDS.includes(raw.templateId) ? raw.templateId : DEFAULT_TEMPLATE,
     theme: {
@@ -320,6 +353,9 @@ export function normalizeDoc(raw) {
       spacing: step(theme.spacing, SPACING_STEPS, DEFAULT_SPACING),
       margin: step(theme.margin, MARGIN_STEPS, DEFAULT_MARGIN),
       size: Object.hasOwn(PAGE_SIZES, theme.size) ? theme.size : 'a4',
+      icons: theme.icons !== false, // shown unless turned off
+      fullLinks: theme.fullLinks !== false, // LinkedIn/GitHub as full addresses unless turned off
+      profileHeading: theme.profileHeading !== false, // "Profile" over a summary in the header
     },
     personal: { ...pick(raw.personal, Object.keys(EMPTY_PERSONAL)), photo: validPhoto(obj(raw.personal).photo) },
   };
@@ -345,5 +381,6 @@ export function normalizeDoc(raw) {
     languages: str(raw.languages, LIMITS.long),
     achievements: list(raw.achievements, ['title', 'date'], ['description']),
     interests: str(raw.interests, LIMITS.long),
+    sections: cleanSections(raw.sections),
   };
 }

@@ -70,7 +70,7 @@ export function paginate(page, pageH, { top = BREAK_MARGINS.top, bottom = BREAK_
   // measured only after the blocks before it have been placed.
   for (const el of page.querySelectorAll(BLOCKS.join(','))) {
     if (whole.some(w => w.contains(el))) continue;
-    const span = extent(el, box);
+    const span = extent(el, box, usable);
     if (!span || span.bottom - span.top > usable) continue; // too tall to keep whole: it may split inside
     if (el.matches(BLOCKS[0])) whole.push(el);
     for (let b = pageH; b - bottom < span.bottom; b += pageH) {
@@ -87,7 +87,7 @@ export function paginate(page, pageH, { top = BREAK_MARGINS.top, bottom = BREAK_
           el.before(copy);
           push(copy, b + top - box(copy).top, box);
         } else {
-          push(el, b + top - span.top, box);
+          push(span.el || el, b + top - span.top, box);
         }
         break;
       }
@@ -98,21 +98,33 @@ export function paginate(page, pageH, { top = BREAK_MARGINS.top, bottom = BREAK_
   return pages;
 }
 
+/** An entry up to this share of a page is kept whole, like a printed CV; a longer one may split between bullets. */
+const WHOLE_ENTRY = 0.4;
+
 /**
- * The part of a block that must stay together, and the element to move: a heading with the first
- * line after it, an entry's header with its first bullet, anything else as it is.
+ * The part of a block that must stay together, and the element to move (`el`, when it is not the
+ * block itself): a heading with the first line after it; a short entry whole, a longer one's header
+ * with its first bullet; a list's last bullet with the one before it, so no bullet starts a page alone;
+ * anything else as it is.
  */
-function extent(el, box) {
+function extent(el, box, usable) {
   const own = box(el);
   if (!own.bottom || own.bottom <= own.top) return null;
   if (el.matches('.r-sec > .r-h')) {
     const next = el.nextElementSibling;
-    const first = next?.querySelector('li, .r-row, p, span') || next;
+    // The first thing drawn after the heading. A row laid out with display: contents has no box of its
+    // own (zero height), so the first candidate that really has one is used.
+    const first = [...(next?.querySelectorAll('li, .r-row, p, span, strong') || [])].find(c => c.getBoundingClientRect().height > 0) || next;
     return { top: own.top, bottom: first ? Math.max(own.bottom, box(first).bottom) : own.bottom };
   }
   if (el.matches('.r-item')) {
+    if (own.bottom - own.top <= usable * WHOLE_ENTRY) return own;
     const firstBullet = el.querySelector('li');
     return { top: own.top, bottom: firstBullet ? box(firstBullet).bottom : own.bottom };
+  }
+  const prev = el.previousElementSibling;
+  if (el.matches('.r-item > ul > li') && !el.nextElementSibling && prev?.matches('li')) {
+    return { top: box(prev).top, bottom: own.bottom, el: prev };
   }
   return own;
 }

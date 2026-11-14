@@ -40,7 +40,7 @@ Then open http://localhost:5180. Any static file server works (for example `pyth
 - **Job matcher**: matched, close and missing keywords against a job advert.
 - **Import**: PDF, TXT, or a JSON export. Two-column PDFs are read column by column, and contact details, jobs (with dates, place and company note), bullets with bold, education, skills, certificates, languages, achievements and interests are filled in, and a profile photo placed in the PDF is imported too. A PDF downloaded from this app imports back into the same fields. Parsing is still best-effort: review the result.
 - **Page breaks**: a CV or letter longer than a page is split between entries, bullets and paragraphs, never through a line; later pages get a top margin, and a section that continues on a new page repeats its heading. Signature also prints "Page 1 of 2". The preview shows dashed lines where each PDF page ends.
-- **Download PDF**: asks for a file name and downloads directly. About 160 KB for a full one-page letter, with selectable text and clickable email, website, LinkedIn and GitHub links.
+- **Download PDF**: asks for a file name and downloads directly. Documents in Hind (the default font) get real text in the embedded font: sharp at any zoom, read by applicant tracking systems in reading order with "•" bullets, and small (a dense two-page CV with a photo is about 130 KB). Other fonts fall back to a picture of the page with an invisible text layer. Email, website, LinkedIn and GitHub links are clickable.
 - **Letter names**: a cover letter is named "Cover Letter - <company>" from its "To" details, until you type a name yourself. The download uses the same name.
 - **Storage**: everything stays in `localStorage`, merged safely across open tabs; "Export JSON" for backups.
 
@@ -60,7 +60,7 @@ npm ci
 |---|---|
 | `npm run lint` | ESLint over the app, tests and scripts |
 | `npm test` | 145 unit tests (Node's built-in runner, no browser) |
-| `npm run test:e2e` | 50 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
+| `npm run test:e2e` | 52 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
 | `npm run serve` | Static dev server on port 5180 |
 | `npm run load` | HTTP load test against the running container |
 | `node scripts/bench.mjs` | Timings for rendering, coaching, storage |
@@ -91,7 +91,9 @@ js/app.js             router; home, templates and documents views
 js/editor.js          editor: on-page editing, tool rail, form and coach panels
 js/tools.js           ATS checker and job matcher views
 js/preview.js         scales A4 pages to fit
-js/pdf-export.js      PDF: indexed PNG page image + photo JPEG + invisible text layer
+js/pdf-export.js      PDF: page picture (backgrounds, icons) + photo JPEG + text
+js/pdf-text.js        real text in the embedded font, bullets, decorations
+fonts/                font files embedded in PDFs (SIL Open Font License)
 js/paginate.js        page breaks that keep blocks whole
 js/importer.js        PDF/TXT import and résumé text parsing
 js/richtext.js        pasted HTML and in-page edits → letter markup

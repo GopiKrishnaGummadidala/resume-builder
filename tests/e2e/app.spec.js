@@ -747,7 +747,8 @@ test.describe('importing a PDF', () => {
         ['Senior Product Designer', 'Brightline Analytics', '2021', 'Present'],
         ['Product Designer', 'Northwind Labs', '2018', '2021'],
       ]);
-      expect.soft(r.experience[0].bullets.split('\n'), id).toContain('Led redesign of onboarding flow, increasing 7-day activation by 23%');
+      // Bold is real text in the PDF, so it comes back too.
+      expect.soft(r.experience[0].bullets.split('\n'), id).toContain('Led redesign of onboarding flow, **increasing 7-day activation by 23%**');
       expect.soft(r.experience[1].bullets.split('\n').length, id).toBe(3);
       expect.soft(r.education.map(e => e.degree), id).toEqual(['B.A. Interaction Design']);
       expect.soft(r.skills.split(', '), id).toContain('Journey Mapping');
@@ -930,5 +931,45 @@ test.describe('Signature on more than one page', () => {
     expect(text.toLowerCase().split('work experience').length - 1).toBe(2);
     // The footers are left out of the text, so a re-import is not confused by them.
     expect(text).not.toMatch(/Page \d of \d/);
+  });
+});
+
+test.describe('PDF with real text', () => {
+  const build = (page, templateId, font) => page.evaluate(async ({ templateId, font }) => {
+    const { sampleResume } = await import('/js/data.js');
+    const { buildPdf } = await import('/js/pdf-export.js');
+    const { fileToText } = await import('/js/importer.js');
+    const cv = sampleResume(templateId);
+    if (font) cv.theme.font = font;
+    const out = await buildPdf(cv, document.querySelector('#print-area'));
+    await fileToText(new File(['x'], 'x.pdf', { type: 'application/pdf' })).catch(() => {});
+    const doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(await out.blob.arrayBuffer()), isEvalSupported: false }).promise;
+    const p = await doc.getPage(1);
+    const content = await p.getTextContent();
+    await p.getOperatorList();
+    const fonts = Object.keys(content.styles).map(f => p.commonObjs.get(f)?.name || '');
+    // Plain extraction in drawing order, the way a simple applicant tracking system reads a PDF.
+    const text = content.items.map(it => it.str + (it.hasEOL ? '\n' : '')).join('');
+    return { mode: out.text, kb: out.blob.size / 1024, fonts, text };
+  }, { templateId, font });
+
+  test('text is written in the embedded font, in reading order, with bullets', async ({ page }) => {
+    const r = await build(page, 'signature');
+    expect(r.mode).toBe('text');
+    expect(r.fonts.some(f => /Hind/.test(f))).toBe(true);
+    expect(r.fonts.some(f => /Helvetica/i.test(f))).toBe(false);
+    const at = s => r.text.indexOf(s);
+    expect(at('Jordan Rivera')).toBeGreaterThanOrEqual(0);
+    expect(at('Jordan Rivera')).toBeLessThan(at('Senior Product Designer'));
+    expect(at('Brightline Analytics')).toBeLessThan(at('Northwind Labs'));
+    expect(r.text).toMatch(/• ?Led redesign of onboarding flow/);
+    expect(r.text).not.toContain('**');
+    expect(r.kb, `${r.kb.toFixed(0)} KB`).toBeLessThan(120);
+  });
+
+  test('a font that cannot be embedded falls back to a picture of the page, still searchable', async ({ page }) => {
+    const r = await build(page, 'classic', 'inter');
+    expect(r.mode).toBe('image');
+    expect(r.text).toContain('Jordan Rivera');
   });
 });

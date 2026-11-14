@@ -1,21 +1,33 @@
 // PDF export, fully in the browser.
 //
 // How a PDF is built:
-//   1. Render the document off-screen at A4 size (the same renderer as the preview), and move blocks
+//   1. Render the document off-screen at page size (the same renderer as the preview), and move blocks
 //      that a page break would cut to the next page (paginate.js).
-//   2. Capture it as a bitmap (html2canvas) so the PDF looks exactly like the preview, fonts included.
-//   3. Encode each page as an indexed-colour PNG (a small palette, lossless edges), which is far
-//      smaller than a JPEG for a page of text and keeps letters sharp. See docs/design-rationale.md.
-//   4. Lay invisible, word-positioned text over the image so the PDF is selectable, searchable and
-//      readable by applicant tracking systems.
+//   2. Capture the page as a picture (html2canvas): backgrounds, bands, chips, icons and the photo.
+//   3. Encode each page picture as an indexed-colour PNG (a small palette, lossless edges); the photo
+//      is cut out and stored as its own small JPEG. See docs/design-rationale.md.
+//   4. Text. When the document's font can be embedded (pdf-text.js), the picture is taken with all
+//      text transparent and every word is written as real text in that font: sharp at any zoom,
+//      small, and read by applicant tracking systems as text. Otherwise the picture includes the
+//      text, and invisible word-positioned text is laid over it so the PDF can still be searched.
 //   5. Add a clickable area over every link (email, website, LinkedIn, GitHub).
 import { renderDoc } from './templates.js';
 import { LETTER_TITLE, pageSize } from './data.js';
 import { paginate } from './paginate.js';
 import { loadLib } from './platform.js';
+import { canWriteText, keepDecorations, PSEUDO_COLOURS, GRAPHICS_OFF, loadFonts, writeText, drawGraphics } from './pdf-text.js';
 
-/** Encoding settings. `colors` is the palette size per page; `scale` is bitmap pixels per CSS pixel. */
-export const PDF_DEFAULTS = Object.freeze({ scale: 2, encoder: 'indexed', colors: 48, jpegQuality: 0.82 });
+/**
+ * Encoding settings. `colors` is the palette size per page; `scale` is bitmap pixels per CSS pixel;
+ * `text` is 'auto' (real text when the font can be embedded) or 'image' (always a picture of the text).
+ */
+export const PDF_DEFAULTS = Object.freeze({ scale: 2, encoder: 'indexed', colors: 48, jpegQuality: 0.82, text: 'auto' });
+
+/** CSS for the page picture when the text is written separately: text and list bullets are left out. */
+// (html2canvas turns ::before / ::after into html2canvaspseudoelement elements; those are decoration
+// and keep their colour, see keepDecorations.)
+const HIDE_TEXT = '.pdf-vector, .pdf-vector *:not(svg):not(svg *):not(html2canvaspseudoelement) { color: transparent !important; text-shadow: none !important; }'
+  + ' .pdf-vector li::marker { color: transparent !important; }';
 
 // PDF standard fonts only encode Latin-1; map common typographic characters for the hidden text layer.
 export const latin1 = s => s
@@ -101,27 +113,62 @@ function addLinks(pdf, page, pageCssH, ptPerPx) {
 /**
  * Photographs on the page, each cut out of the page bitmap as its own small JPEG. The page image
  * keeps its small palette (a photo would need the full 256 colours, and still band in skin tones),
- * and the photo is laid over it in the PDF. The area under each photo is filled with the colour at
- * its corner, so the page image compresses well there.
- * @returns {{x: number, y: number, w: number, h: number, fill: string, jpeg: string}[]} in bitmap pixels
+ * and the photo is laid over it in the PDF, clipped to its circle so no square edge shows. Under the
+ * photo the page image gets a flat disc in the photo's outer ring colour, which compresses well.
+ * @returns {{x: number, y: number, w: number, h: number, round: boolean, fill: string, jpeg: string}[]} in bitmap pixels
  */
 function cutOutPhotos(page, canvas, opts) {
   const origin = page.getBoundingClientRect();
-  const pad = 4; // CSS px around the photo: its border and shadow
   return [...page.querySelectorAll('img.r-photo')].map(img => {
     const r = img.getBoundingClientRect();
-    const x = Math.max(0, Math.floor((r.left - origin.left - pad) * opts.scale));
-    const y = Math.max(0, Math.floor((r.top - origin.top - pad) * opts.scale));
-    const w = Math.min(canvas.width - x, Math.ceil((r.width + 2 * pad) * opts.scale));
-    const h = Math.min(canvas.height - y, Math.ceil((r.height + 2 * pad) * opts.scale));
+    const x = Math.max(0, Math.floor((r.left - origin.left) * opts.scale));
+    const y = Math.max(0, Math.floor((r.top - origin.top) * opts.scale));
+    const w = Math.min(canvas.width - x, Math.ceil(r.width * opts.scale));
+    const h = Math.min(canvas.height - y, Math.ceil(r.height * opts.scale));
     const cut = document.createElement('canvas');
     cut.width = w;
     cut.height = h;
     const ctx = cut.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
-    const [red, green, blue] = ctx.getImageData(0, 0, 1, 1).data;
-    return { x, y, w, h, fill: `rgb(${red},${green},${blue})`, jpeg: cut.toDataURL('image/jpeg', 0.85) };
+    // The colour of the outer ring, a little inside its edge (the edge itself is blended with the page).
+    const ring = Math.max(1, Math.round(parseFloat(getComputedStyle(img).borderTopWidth) * opts.scale / 2));
+    const [red, green, blue] = ctx.getImageData(Math.floor(w / 2), ring, 1, 1).data;
+    const radius = getComputedStyle(img).borderTopLeftRadius; // "50%" or a length
+    const round = (radius.endsWith('%') ? (parseFloat(radius) / 100) * r.width : parseFloat(radius)) >= r.width / 2 - 1;
+    return { x, y, w, h, round, fill: `rgb(${red},${green},${blue})`, jpeg: cut.toDataURL('image/jpeg', 0.9) };
   }).filter(p => p.w > 0 && p.h > 0);
+}
+
+/** Fill the photo's place in the page image (a disc for a round photo, slightly larger to cover its edge). */
+function blankPhoto(ctx, p, top) {
+  ctx.fillStyle = p.fill;
+  if (!p.round) { ctx.fillRect(p.x, p.y - top, p.w, p.h); return; }
+  ctx.beginPath();
+  ctx.arc(p.x + p.w / 2, p.y - top + p.h / 2, p.w / 2 + 1, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Lay the photo over the page image; a round photo is clipped to its circle. */
+function placePhoto(pdf, p, top, k) {
+  const x = p.x * k, y = (p.y - top) * k, w = p.w * k, h = p.h * k;
+  if (!p.round) { pdf.addImage(p.jpeg, 'JPEG', x, y, w, h); return; }
+  // The clipping circle is written as PDF operators (four Bézier arcs, then "W n"): jsPDF's own
+  // circle() writes no path when it is asked not to paint one.
+  // Clipped a little inside the photo's edge: the outermost pixels are blended with the page behind,
+  // and the flat disc under the photo (blankPhoto) gives the clean outer edge instead.
+  const cx = x + w / 2, cy = pdf.internal.pageSize.getHeight() - (y + h / 2), r = w / 2 - 1.5 * k, c = r * 0.5523;
+  const n = v => v.toFixed(2);
+  pdf.internal.write([
+    'q',
+    `${n(cx + r)} ${n(cy)} m`,
+    `${n(cx + r)} ${n(cy + c)} ${n(cx + c)} ${n(cy + r)} ${n(cx)} ${n(cy + r)} c`,
+    `${n(cx - c)} ${n(cy + r)} ${n(cx - r)} ${n(cy + c)} ${n(cx - r)} ${n(cy)} c`,
+    `${n(cx - r)} ${n(cy - c)} ${n(cx - c)} ${n(cy - r)} ${n(cx)} ${n(cy - r)} c`,
+    `${n(cx + c)} ${n(cy - r)} ${n(cx + r)} ${n(cy - c)} ${n(cx + r)} ${n(cy)} c`,
+    'W n',
+  ].join('\n'));
+  pdf.addImage(p.jpeg, 'JPEG', x, y, w, h);
+  pdf.internal.write('Q');
 }
 
 /** Encode one page bitmap. Returns { data, format } for jsPDF.addImage. */
@@ -137,7 +184,8 @@ async function encodePage(canvas, opts) {
 
 /**
  * Build a PDF for `doc`. `area` is the hidden off-screen render target.
- * Resolves { blob, pages }. Throws with a readable message when a library cannot be loaded.
+ * Resolves { blob, pages, text }: `text` says whether the words are real text ('text') or part of the
+ * page picture ('image'). Throws with a readable message when a library or font cannot be loaded.
  */
 export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
   const opts = { ...PDF_DEFAULTS, ...overrides };
@@ -150,18 +198,31 @@ export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
   try {
     await document.fonts.ready;
     const page = area.querySelector('.page');
+    const vector = opts.text !== 'image' && canWriteText(page);
+    if (vector) {
+      keepDecorations(page);
+      // Icons take their colour from the text around them; keep it when the text is made transparent.
+      page.querySelectorAll('svg').forEach(svg => { svg.style.color = getComputedStyle(svg).color; });
+    }
     paginate(page, size.H); // page breaks fall between blocks, never through a line
     const fullH = Math.max(page.scrollHeight, size.H);
     const canvas = await html2canvas(page, {
       scale: opts.scale, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, logging: false,
       width: size.W, height: fullH, windowWidth: size.W, windowHeight: fullH, // the whole page, not just the visible frame
+      onclone: vector ? (cloned, el) => {
+        const style = cloned.createElement('style');
+        style.textContent = HIDE_TEXT + PSEUDO_COLOURS + GRAPHICS_OFF;
+        cloned.head.appendChild(style);
+        el.classList.add('pdf-vector');
+      } : undefined,
     });
     const pdf = new jsPDF({ unit: 'pt', format: size.pdf, compress: true });
     pdf.setProperties({ title, author: doc.personal?.name || '', creator: 'Craftfolio' });
     const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
     const ptPerBitmapPx = pw / canvas.width;
     const sliceH = Math.floor(canvas.width * (ph / pw)); // bitmap rows per PDF page
-    const photos = opts.encoder === 'indexed' ? cutOutPhotos(page, canvas, opts) : [];
+    // With real text the photo is drawn from its own image (drawGraphics); otherwise it is cut out here.
+    const photos = opts.encoder === 'indexed' && !vector ? cutOutPhotos(page, canvas, opts) : [];
     let pages = 0;
     for (let y = 0; y < canvas.height - 4; y += sliceH, pages++) {
       const part = document.createElement('canvas');
@@ -170,15 +231,23 @@ export async function buildPdf(doc, area, { title = '', ...overrides } = {}) {
       const ctx = part.getContext('2d', { willReadFrequently: true });
       ctx.drawImage(canvas, 0, y, canvas.width, part.height, 0, 0, canvas.width, part.height);
       const onThisPage = photos.filter(p => p.y >= y && p.y < y + part.height);
-      onThisPage.forEach(p => { ctx.fillStyle = p.fill; ctx.fillRect(p.x, p.y - y, p.w, p.h); });
+      onThisPage.forEach(p => blankPhoto(ctx, p, y));
       const img = await encodePage(part, opts);
       if (pages) pdf.addPage();
       pdf.addImage(img.data, img.format, 0, 0, pw, part.height * ptPerBitmapPx, undefined, 'FAST');
-      onThisPage.forEach(p => pdf.addImage(p.jpeg, 'JPEG', p.x * ptPerBitmapPx, (p.y - y) * ptPerBitmapPx, p.w * ptPerBitmapPx, p.h * ptPerBitmapPx));
+      onThisPage.forEach(p => placePhoto(pdf, p, y, ptPerBitmapPx));
     }
-    addTextLayer(pdf, page, size.W * (ph / pw), pw / size.W);
-    addLinks(pdf, page, size.W * (ph / pw), pw / size.W);
-    return { blob: pdf.output('blob'), pages };
+    const pageCssH = size.W * (ph / pw), ptPerPx = pw / size.W;
+    if (vector) {
+      const place = y => onPage(pdf, y, pageCssH);
+      const fontFor = await loadFonts(pdf, page);
+      await drawGraphics(pdf, page, place, ptPerPx);
+      writeText(pdf, page, fontFor, place, ptPerPx);
+    } else {
+      addTextLayer(pdf, page, pageCssH, ptPerPx);
+    }
+    addLinks(pdf, page, pageCssH, ptPerPx);
+    return { blob: pdf.output('blob'), pages, text: vector ? 'text' : 'image' };
   } finally {
     area.classList.remove('rendering');
     area.innerHTML = '';

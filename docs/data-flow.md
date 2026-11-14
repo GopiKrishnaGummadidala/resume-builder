@@ -113,7 +113,7 @@ Files are read in the browser; they are never uploaded.
 
 **Photo (`findPhoto`).** On page 1, the largest roughly square image drawn in the top half and narrower than 40% of the page is taken as the profile photo, cropped to a square and shrunk like an upload. A PDF that is one page-sized picture (this app's own export) has no separate photo, so none is taken.
 
-Parsing is best-effort and the app says so after an import. A PDF exported by the app writes an invisible "- " before each list item, so a re-import (or a copy of the text) keeps the bullets apart.
+Parsing is best-effort and the app says so after an import. A PDF exported by the app writes a "•" before each list item (a visible bullet in real-text mode, an invisible one in picture mode), so a re-import, a copy of the text or an applicant tracking system keeps the bullets apart.
 
 ## Exporting a PDF
 

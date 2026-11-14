@@ -33,7 +33,8 @@
 .r-header { margin-bottom: 14px; }
 .r-header.has-photo { display: flex; align-items: center; gap: 18px; }
 .r-id { min-width: 0; flex: 1; }
-.r-photo { width: 92px; height: 92px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: block; border: 3px solid #fff; box-shadow: 0 0 0 2px var(--accent); }
+/* Photo rings are a border and a padding filled with a colour (not shadows): the PDF picture keeps them. */
+.r-photo { width: 92px; height: 92px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: block; border: 2px solid var(--accent); padding: 3px; background: #fff; }
 .r-name { font-size: 26pt; font-weight: 700; line-height: 1.1; color: #111827; letter-spacing: -0.01em; }
 .r-title { font-size: 12.5pt; color: var(--accent); font-weight: 600; margin-top: 4px; }
 .r-contact { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 9.5pt; color: #4b5563; }
@@ -67,7 +68,7 @@
 /* Executive: color band header */
 .tpl-executive { padding-top: 0; }
 .tpl-executive .r-header { background: var(--accent); color: #fff; margin: 0 calc(-1 * var(--mx)) 18px; padding: 36px var(--mx) 24px; }
-.tpl-executive .r-photo { box-shadow: none; }
+.tpl-executive .r-photo { border: 3px solid #fff; padding: 0; }
 .tpl-executive .r-name { color: #fff; }
 .tpl-executive .r-title, .tpl-executive .r-contact { color: rgba(255, 255, 255, .9); }
 .tpl-executive .r-h { color: #111827; border-left: 4px solid var(--accent); padding-left: 8px; }
@@ -83,7 +84,7 @@
 .tpl-modern { padding: 0; }
 .tpl-modern .r-cols { grid-template-columns: 240px 1fr; min-height: var(--ph); gap: 0; }
 .tpl-modern .r-side { background: var(--accent); color: #fff; padding: calc(44px * var(--mg)) 24px; }
-.r-side .r-photo { width: 120px; height: 120px; margin: 0 auto 16px; box-shadow: none; border-color: rgba(255, 255, 255, .85); }
+.r-side .r-photo { width: 120px; height: 120px; margin: 0 auto 16px; border: 3px solid rgba(255, 255, 255, .85); padding: 0; }
 .tpl-modern .r-side .r-name { color: #fff; font-size: 21pt; }
 .tpl-modern .r-side .r-title { color: rgba(255, 255, 255, .85); }
 .tpl-modern .r-side .r-h { color: #fff; border-bottom: 1px solid rgba(255, 255, 255, .35); padding-bottom: 3px; }
@@ -126,7 +127,7 @@
 .tpl-elegant .r-contact { justify-content: center; }
 .tpl-elegant .r-h { text-align: center; color: #111827; font-weight: 600; letter-spacing: .22em; font-size: 9.5pt; display: flex; align-items: center; gap: 12px; }
 .tpl-elegant .r-h::before, .tpl-elegant .r-h::after { content: ''; flex: 1; height: 1px; background: var(--accent); }
-.tpl-elegant .r-photo { box-shadow: 0 0 0 1px #9ca3af; }
+.tpl-elegant .r-photo { border: 1px solid #9ca3af; padding: 3px; }
 
 /* Bold: large name, solid heading bars */
 .tpl-bold .r-name { font-size: 34pt; font-weight: 800; letter-spacing: -.02em; }
@@ -148,9 +149,11 @@
 .b-head { border-radius: 11px; overflow: hidden; color: #fff; }
 .b-top { background: #313c4e; padding: 7px 15px 10px; }
 .b-head.has-photo .b-top { display: flex; align-items: center; gap: 18px; padding: 12px 18px; }
-.b-top .r-photo { width: 96px; height: 96px; border: 3px solid var(--accent); box-shadow: none; }
+.b-top .r-photo { width: 96px; height: 96px; border: 3px solid var(--accent); padding: 0; }
 .b-id { min-width: 0; flex: 1; }
 .b-summary { font-size: 12.5px; line-height: 1.45; margin-top: 6px !important; color: rgba(255, 255, 255, .92); }
+.b-sum-h { margin-top: 8px; font-size: 11px; line-height: 1.3; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgba(255, 255, 255, .75); }
+.b-sum-h + .b-summary { margin-top: 2px !important; }
 .b-top .r-name { color: #fff; font-size: 24px; font-weight: 700; line-height: 1.35; letter-spacing: 0; }
 .b-top .r-title { color: #fff; font-size: 16px; font-weight: 400; margin-top: 0; line-height: 1.4; }
 .b-contact { background: var(--accent); display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 26px; padding: 11px 24px 12px; font-size: 12px; line-height: 1.2; }
@@ -237,10 +240,12 @@
 .s-head .r-title { font-size: 11pt; font-weight: 400; line-height: 1.3; color: var(--accent); margin-top: 0; }
 .s-band { background: var(--ink); color: #fff; border-radius: 8pt 8pt 0 0; padding: 3pt 11pt 8pt; min-height: 22pt; }
 .s-head.has-photo .s-band { padding-left: 117pt; }
+.s-band .b-sum-h { margin: 0 0 1.5pt; font-size: 9pt; line-height: 12pt; letter-spacing: .05em; text-transform: uppercase; color: #fff; }
 .s-band .b-summary { font-size: 9pt; line-height: 12pt; color: #fff; margin: 0 !important; }
 .s-band .b-summary strong { font-weight: 700; }
-.s-head .r-photo { position: absolute; z-index: 1; left: 13.5pt; top: 5pt; width: 89pt; height: 89pt; margin: 0;
-  border: 2.2pt solid var(--accent); box-shadow: 0 0 0 2pt var(--ink); }
+/* Your CV: the photo, a thin ring in the accent colour, and a thicker dark ring outside it. */
+.s-head .r-photo { position: absolute; z-index: 1; left: 11.5pt; top: 3pt; width: 93pt; height: 93pt; margin: 0;
+  border: 3.3pt solid var(--ink); padding: 2pt; background: var(--accent); }
 .s-head .b-contact { background: var(--accent); border-radius: 0 0 8pt 8pt; padding: 7pt 20pt 9pt; gap: 10pt 16pt; font-size: 8pt; line-height: 11pt; color: #fff; }
 .s-head .b-ci { gap: 5pt; }
 .s-head .b-ci svg { width: 12pt; height: 12pt; stroke-width: 1.4; }
@@ -254,14 +259,14 @@
 
 /* Section titles: a dark round icon and the title in capitals */
 .tpl-signature .r-h { display: flex; align-items: center; gap: 4.5pt; margin: 0 0 9pt; color: var(--ink); font-size: 11pt; font-weight: 700; line-height: 20pt; letter-spacing: .01em; }
-.tpl-signature .r-ico { display: inline-flex; width: 20pt; height: 20pt; padding: 4.5pt; border-radius: 50%; background: var(--ink); color: #fff; flex-shrink: 0; }
-.tpl-signature .r-ico svg { stroke-width: 1.5; }
+.tpl-signature .r-ico { display: inline-flex; width: 20pt; height: 20pt; padding: 2.6pt; border-radius: 50%; background: var(--ink); color: #fff; flex-shrink: 0; }
+.tpl-signature .r-ico svg { stroke-width: 1.9; }
 .tpl-signature .r-sec { margin-top: 10pt; }
 
 /* Work experience: title, employer, company note, "dates | place", then the achievements */
 .tpl-signature [data-sec="experience"] .r-item {
   display: grid; grid-template-columns: auto auto 1fr; margin-bottom: 14pt;
-  grid-template-areas: "role role role" "co co co" "about about about" "date place ." "list list list";
+  grid-template-areas: "role role role" "co co co" "about about about" "date place ." "tasks tasks tasks" "list list list";
 }
 .tpl-signature [data-sec="experience"] .r-row { display: contents; }
 .tpl-signature .r-sub { font-style: normal; color: #000; }
@@ -271,10 +276,10 @@
 .tpl-signature [data-sec="experience"] .r-sub > span:last-child:not(:empty)::before { content: '|'; margin: 0 5pt 0 4pt; font-size: 8pt; color: #3b3b3b; }
 .tpl-signature [data-sec="experience"] .r-date { grid-area: date; font-size: 9pt; line-height: 12pt; color: #000; font-style: normal; font-weight: 400; white-space: nowrap; }
 .tpl-signature [data-sec="experience"] .r-about { grid-area: about; font-size: 8.26pt; line-height: 11pt; color: #7f7f7f; font-style: italic; margin: 1pt 0 !important; }
-.tpl-signature [data-sec="experience"] .r-item > ul { grid-area: list; margin: 5pt 0 0; padding-left: 7.6pt; }
-.tpl-signature [data-sec="experience"] .r-item > ul::before { content: 'Achievements/Tasks'; display: block; margin: 0 0 1pt -7.6pt; font-size: 9pt; line-height: 12.5pt; font-weight: 700; color: var(--accent); }
+.tpl-signature [data-sec="experience"] .r-item > ul { grid-area: list; margin: 0; padding-left: 7.6pt; }
+.tpl-signature [data-sec="experience"] .r-tasks { grid-area: tasks; margin: 5pt 0 1pt !important; font-size: 9pt; line-height: 12.5pt; font-weight: 700; color: var(--accent); }
 .tpl-signature [data-sec="experience"] li { margin: 0; line-height: 12pt; }
-.tpl-signature .r-main li::marker { color: var(--accent); font-size: 1.1em; }
+.tpl-signature .r-main li::marker { color: var(--accent); font-size: 1.35em; }
 .tpl-signature .r-main li strong { font-weight: 700; color: #000; }
 
 /* Side panel: one light grey panel; a section moved to the next page starts a new panel there */
@@ -313,6 +318,26 @@
 .tpl-signature .r-interests li:last-child { margin-bottom: 0; }
 .tpl-signature .r-int-ico { display: inline-flex; width: 12pt; height: 12pt; color: var(--ink); flex-shrink: 0; }
 .tpl-signature .r-int-ico svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Signature One: the Signature look in a single column for job portals (every section full width; one line per certificate or language) */
+.tpl-signature-one .b-body { margin-top: 12pt; }
+.tpl-signature-one .r-main { padding: 6pt 11pt 0; }
+.tpl-signature-one .r-sec { margin-top: 6pt; }
+.tpl-signature-one .r-h { margin-bottom: 4pt; }
+.tpl-signature-one [data-sec="experience"] .r-item { margin-bottom: 10pt; }
+.tpl-signature-one .r-chips { gap: 3pt 4pt; }
+.tpl-signature-one .r-chips span { padding: 1.5pt 4.5pt; font-size: 8.5pt; line-height: 12pt; }
+.tpl-signature-one [data-sec="languages"] .r-entries { display: flex; flex-wrap: wrap; gap: 0 24pt; }
+.tpl-signature-one .r-entries li { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 6pt; margin: 0 0 2pt; }
+.tpl-signature-one .r-entries .r-e-s::before { content: "\B7"; margin-right: 6pt; color: #7a7a7a; font-style: normal; }
+.tpl-signature-one .r-entries .r-e-d { margin-left: auto; }
+.tpl-signature-one [data-sec="languages"] li { margin: 0; }
+.tpl-signature-one .r-interests { display: flex; flex-wrap: wrap; gap: 4pt 18pt; }
+.tpl-signature-one .r-interests li { margin: 0; }
+.tpl-signature-one [data-sec="education"] .r-item, .tpl-signature-one [data-sec="achievements"] .r-item { margin-bottom: 5pt; }
+.tpl-signature-one [data-sec="education"] .r-row > strong, .tpl-signature-one [data-sec="achievements"] .r-row > strong { font-size: 10pt; line-height: 13pt; color: #000; }
+.tpl-signature-one [data-sec="education"] .r-date, .tpl-signature-one [data-sec="achievements"] .r-date { font-size: 9pt; font-style: normal; color: #000; }
+.tpl-signature-one [data-sec="achievements"] .r-p { font-size: 8.8pt; line-height: 11.5pt; color: #3b3b3b; margin: 0 !important; }
 .r-int-ico { display: none; }
 
 /* "Page 1 of 2" (added by paginate() for templates that number their pages) */
@@ -355,3 +380,142 @@ ul.l-lines > li:only-child:empty::before { content: 'Achievement: what you did a
 .ed-add::before { content: '+ ' attr(data-label); }
 .ed-add:hover, .ed-add:focus-visible { border-color: var(--accent); color: var(--accent); }
 /* On a coloured sidebar or header the controls keep their own light surface */
+
+/* "Show icons" turned off in the Layout menu */
+.no-icons .r-ico, .no-icons .b-ci > svg, .no-icons .r-int-ico { display: none !important; }
+
+/* ---------- Horizon: portrait header, contact band, three-tone rules, work timeline, two-up grids ---------- */
+.tpl-horizon { --ink: #15303d; --rule: 3.5pt; padding: calc(26pt * var(--mg)) calc(26pt * var(--mg)) 34pt; color: #1e2a33; font-size: 9.6pt; line-height: calc(13pt + (var(--sp) - 1) * 4pt); }
+.tpl-horizon.page { position: relative; }
+.h-top { display: flex; align-items: flex-start; gap: 20pt; }
+.h-head .r-photo { width: 112pt; height: 112pt; margin: 0; border: 3pt solid var(--accent); padding: 2.5pt; background: #fff; }
+.h-id { flex: 1; min-width: 0; padding-top: 6pt; }
+.h-id .r-name { font-size: 25pt; line-height: 1.1; font-weight: 500; color: var(--ink); letter-spacing: 0; }
+.h-id .r-title { font-size: 13pt; line-height: 1.35; color: var(--accent); margin: 1pt 0 0; font-weight: 400; }
+.h-id .b-sum-h { margin-top: 6pt; color: var(--ink); font-size: 8.5pt; }
+.h-id .b-summary { margin-top: 3pt !important; color: #1e2a33; font-size: 9.6pt; line-height: 13pt; }
+.h-id .b-sum-h + .b-summary { margin-top: 1pt !important; }
+.h-contact { margin-top: 13pt; display: grid; grid-template-columns: 1fr 1fr; gap: 6pt 22pt; justify-content: start; background: var(--ink); color: #fff; border-radius: 5pt; padding: 9pt 16pt; font-size: 9.4pt; line-height: 12pt; }
+.tpl-horizon .b-ci { gap: 8pt; min-width: 0; color: #fff; }
+.tpl-horizon .b-ci > span { overflow-wrap: anywhere; }
+.tpl-horizon .b-ci svg { width: 13pt; height: 13pt; }
+.tpl-horizon .b-upper { text-transform: none; }
+
+/* Sections: a three-tone rule (ink, accent, pale accent) above every section after the first */
+.tpl-horizon .r-sec { position: relative; margin-top: 13pt; padding-top: 13pt; }
+.tpl-horizon .r-main > .r-sec:first-child { margin-top: 13pt; padding-top: 0; }
+.tpl-horizon .r-sec::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: var(--rule); border-radius: 2pt; background: linear-gradient(90deg, var(--ink) 0%, var(--ink) 33.4%, var(--accent) 33.4%, var(--accent) 100%); }
+.tpl-horizon .r-sec::after { content: ''; position: absolute; top: 0; right: 0; width: 33.3%; height: var(--rule); border-radius: 0 2pt 2pt 0; background: rgba(255, 255, 255, .55); }
+.tpl-horizon .r-main > .r-sec:first-child::before, .tpl-horizon .r-main > .r-sec:first-child::after { display: none; }
+.tpl-horizon .r-h { display: flex; align-items: center; gap: 7pt; margin: 0 0 8pt; font-size: 13.5pt; line-height: 21pt; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--ink); }
+.tpl-horizon .r-ico { display: inline-flex; width: 21pt; height: 21pt; padding: 3.2pt; border-radius: 50%; background: var(--ink); color: #fff; flex-shrink: 0; }
+.tpl-horizon .r-ico svg { stroke-width: 1.8; }
+.tpl-horizon .r-h-cont::before, .tpl-horizon .r-h-cont::after { display: none; }
+
+/* Work experience: a line from the heading icon down past every job, with a dot at each job */
+.tpl-horizon [data-sec="experience"] > .r-body { margin-left: 9.5pt; padding-left: 17.6pt; }
+/* The line is drawn per job (so it stops at page breaks), from the heading icon or the job above down to the next job */
+.tpl-horizon [data-sec="experience"] .r-item::after { content: ''; position: absolute; left: -17.6pt; top: 0; bottom: -9pt; width: 1.6pt; background: var(--ink); }
+.tpl-horizon [data-sec="experience"] .r-item:first-child::after { top: -8pt; }
+.tpl-horizon [data-sec="experience"] .r-item:last-child::after { bottom: 0; }
+.tpl-horizon [data-sec="experience"] .r-h-cont { margin-left: -27.1pt; }
+.tpl-horizon [data-sec="experience"] .r-h-cont + .r-item::after { top: -8pt; }
+.tpl-horizon [data-sec="experience"] .r-item { position: relative; display: grid; grid-template-columns: 1fr auto; margin-bottom: 9pt;
+  grid-template-areas: "role role" "co co" "about about" "date place" "tasks tasks" "list list"; }
+.tpl-horizon [data-sec="experience"] .r-item:last-child { margin-bottom: 0; }
+.tpl-horizon [data-sec="experience"] .r-item::before { content: ''; position: absolute; z-index: 1; left: calc(-17.6pt + .8pt - 5pt); top: 3pt; width: 7pt; height: 7pt; border-radius: 50%; background: var(--accent); border: 1.5pt solid #fff; }
+.tpl-horizon [data-sec="experience"] .r-row, .tpl-horizon [data-sec="experience"] .r-sub { display: contents; }
+.tpl-horizon [data-sec="experience"] .r-row > strong { grid-area: role; font-size: 12pt; line-height: 15pt; font-weight: 700; color: var(--ink); }
+.tpl-horizon [data-sec="experience"] .r-sub > span:first-child { grid-area: co; font-size: 11.5pt; line-height: 15pt; font-style: normal; color: var(--ink); }
+.tpl-horizon [data-sec="experience"] .r-date { grid-area: date; font-size: 9pt; font-style: italic; color: var(--accent); }
+.tpl-horizon [data-sec="experience"] .r-sub > span:last-child { grid-area: place; justify-self: end; font-size: 9pt; font-style: italic; color: var(--accent); }
+.tpl-horizon [data-sec="experience"] .r-about { grid-area: about; margin: 1pt 0 !important; font-size: 8.6pt; line-height: 11.5pt; font-style: italic; color: #6b7280; }
+.tpl-horizon [data-sec="experience"] .r-item > ul { grid-area: list; margin: 3pt 0 0; padding-left: 11pt; }
+.tpl-horizon .r-main li::marker { color: var(--accent); }
+.tpl-horizon [data-sec="experience"] li { margin: 0 0 2.5pt; }
+
+/* Two-up grids: education, certificates, awards, projects */
+.tpl-horizon [data-sec="education"] > .r-body, .tpl-horizon [data-sec="achievements"] > .r-body, .tpl-horizon [data-sec="projects"] > .r-body, .tpl-horizon .r-entries {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8pt 22pt; align-items: start; }
+.tpl-horizon [data-sec="education"] .r-item, .tpl-horizon [data-sec="achievements"] .r-item, .tpl-horizon [data-sec="projects"] .r-item { display: flex; flex-direction: column; margin: 0; }
+.tpl-horizon [data-sec="education"] .r-row, .tpl-horizon [data-sec="achievements"] .r-row, .tpl-horizon [data-sec="projects"] .r-row { display: contents; }
+.tpl-horizon [data-sec="education"] .r-row > strong { order: 1; font-size: 11pt; line-height: 14pt; color: var(--ink); }
+.tpl-horizon [data-sec="education"] .r-sub { order: 2; display: flex; justify-content: flex-start; gap: 0 6pt; font-style: normal; font-size: 10.5pt; line-height: 14pt; color: var(--ink); }
+.tpl-horizon [data-sec="education"] .r-sub > span:last-child:not(:empty)::before { content: "\B7"; margin-right: 6pt; color: #6b7280; }
+.tpl-horizon [data-sec="education"] .r-date { order: 3; font-style: italic; font-size: 9pt; color: var(--accent); }
+.tpl-horizon [data-sec="education"] .r-p { order: 4; }
+.tpl-horizon [data-sec="achievements"] .r-row > strong, .tpl-horizon [data-sec="projects"] .r-row > strong { font-size: 10.5pt; line-height: 13.5pt; font-weight: 500; color: var(--ink); }
+.tpl-horizon [data-sec="achievements"] .r-date, .tpl-horizon [data-sec="projects"] .r-date { font-size: 9pt; font-style: italic; color: var(--accent); white-space: normal; }
+.tpl-horizon [data-sec="achievements"] .r-p, .tpl-horizon [data-sec="projects"] .r-p { margin: 1pt 0 0 !important; font-size: 8.8pt; line-height: 11.8pt; font-style: italic; color: #6b7280; }
+.tpl-horizon .r-entries li { display: flex; flex-direction: column; margin: 0; }
+.tpl-horizon .r-entries .r-e-t { font-size: 10.5pt; line-height: 13.5pt; color: var(--ink); }
+.tpl-horizon .r-entries .r-e-s { font-size: 8.8pt; line-height: 11.8pt; font-style: italic; color: #6b7280; opacity: 1; }
+.tpl-horizon .r-entries .r-e-d { order: -1; font-size: 9pt; line-height: 12pt; font-style: italic; color: var(--accent); opacity: 1; }
+
+/* Skills as chips, languages as rings, interests in a row */
+.tpl-horizon .r-chips { gap: 5pt; }
+.tpl-horizon .r-chips span { background: var(--accent); color: #fff; border: 0; border-radius: 3pt; padding: 2.5pt 7pt; font-size: 9.6pt; line-height: 13pt; font-weight: 400; }
+.r-rings { display: flex; flex-wrap: wrap; gap: 10pt 34pt; padding-left: 12pt; }
+.r-rings li { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 60pt; }
+.r-ring { position: relative; width: 26pt; height: 26pt; border-radius: 50%; border: 1.4pt solid var(--accent); margin-bottom: 4pt; }
+.r-ring::after { content: ''; position: absolute; border-radius: 50%; background: var(--ink); inset: 50%; }
+.r-ring[data-level="5"]::after { inset: 1.6pt; }
+.r-ring[data-level="4"]::after { inset: 3.4pt; }
+.r-ring[data-level="3"]::after { inset: 5.4pt; }
+.r-ring[data-level="2"]::after { inset: 7.4pt; }
+.r-ring[data-level="1"]::after { inset: 9pt; }
+.r-rings .r-e-t { font-size: 10pt; line-height: 13pt; color: var(--ink); }
+.r-rings .r-e-s { font-size: 8.4pt; line-height: 11pt; font-style: italic; color: #6b7280; }
+.tpl-horizon .r-interests { display: flex; flex-wrap: wrap; gap: 5pt 22pt; }
+.tpl-horizon .r-interests li { display: flex; align-items: center; gap: 5pt; margin: 0; }
+.tpl-horizon .r-int-ico { display: inline-flex; width: 13pt; height: 13pt; color: var(--ink); }
+.tpl-horizon .r-int-ico svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Horizon, compact: the same design with tighter type and spacing so a long CV fits in fewer pages */
+.tpl-horizon { padding-top: calc(22pt * var(--mg)); font-size: 9.3pt; line-height: calc(12.2pt + (var(--sp) - 1) * 4pt); }
+.tpl-horizon .h-top { gap: 18pt; }
+.tpl-horizon .h-head .r-photo { width: 96pt; height: 96pt; }
+.tpl-horizon .h-id { padding-top: 2pt; }
+.tpl-horizon .h-id .r-name { font-size: 23pt; }
+.tpl-horizon .h-id .r-title { font-size: 12pt; }
+.tpl-horizon .h-id .b-sum-h { margin-top: 4pt; }
+.tpl-horizon .h-id .b-summary { font-size: 9.2pt; line-height: 12.2pt; }
+.tpl-horizon .h-contact { margin-top: 10pt; gap: 3pt 22pt; padding: 7pt 16pt; font-size: 9pt; line-height: 12pt; }
+.tpl-horizon .b-ci svg { width: 12pt; height: 12pt; }
+.tpl-horizon .r-sec { margin-top: 9pt; padding-top: 9pt; }
+.tpl-horizon .r-main > .r-sec:first-child { margin-top: 10pt; }
+.tpl-horizon .r-h { margin-bottom: 5pt; font-size: 12.5pt; line-height: 19pt; }
+.tpl-horizon .r-ico { width: 19pt; height: 19pt; padding: 2.8pt; }
+.tpl-horizon .r-chips { gap: 3.5pt; }
+.tpl-horizon .r-chips span { padding: 1.5pt 6pt; font-size: 9pt; line-height: 12pt; }
+.tpl-horizon [data-sec="experience"] > .r-body { margin-left: 8.5pt; }
+.tpl-horizon [data-sec="experience"] .r-h-cont { margin-left: -26.1pt; }
+.tpl-horizon [data-sec="experience"] .r-item { margin-bottom: 7pt; }
+.tpl-horizon [data-sec="experience"] .r-item::after { bottom: -7pt; }
+.tpl-horizon [data-sec="experience"] .r-item:first-child::after, .tpl-horizon [data-sec="experience"] .r-h-cont + .r-item::after { top: -5pt; }
+.tpl-horizon [data-sec="experience"] .r-row > strong { font-size: 11pt; line-height: 14pt; }
+.tpl-horizon [data-sec="experience"] .r-sub > span:first-child { font-size: 10.5pt; line-height: 13.5pt; }
+.tpl-horizon [data-sec="experience"] .r-date, .tpl-horizon [data-sec="experience"] .r-sub > span:last-child { font-size: 8.6pt; line-height: 11.5pt; }
+.tpl-horizon [data-sec="experience"] .r-about { font-size: 8.3pt; line-height: 11pt; margin: 0 !important; }
+.tpl-horizon [data-sec="experience"] .r-item > ul { margin-top: 2pt; }
+.tpl-horizon [data-sec="experience"] li { margin-bottom: 1pt; }
+.tpl-horizon [data-sec="education"] > .r-body, .tpl-horizon [data-sec="achievements"] > .r-body, .tpl-horizon [data-sec="projects"] > .r-body, .tpl-horizon .r-entries { gap: 5pt 22pt; }
+.tpl-horizon [data-sec="education"] .r-row > strong { font-size: 10.5pt; line-height: 13pt; }
+.tpl-horizon [data-sec="education"] .r-sub { font-size: 10pt; line-height: 13pt; }
+.tpl-horizon .r-entries .r-e-t, .tpl-horizon [data-sec="achievements"] .r-row > strong, .tpl-horizon [data-sec="projects"] .r-row > strong { font-size: 10pt; line-height: 12.8pt; }
+.tpl-horizon .r-entries .r-e-d, .tpl-horizon [data-sec="achievements"] .r-date, .tpl-horizon [data-sec="projects"] .r-date, .tpl-horizon [data-sec="education"] .r-date { font-size: 8.6pt; line-height: 11pt; }
+.tpl-horizon .r-entries .r-e-s, .tpl-horizon [data-sec="achievements"] .r-p, .tpl-horizon [data-sec="projects"] .r-p { font-size: 8.4pt; line-height: 11pt; }
+.tpl-horizon .r-ring { width: 22pt; height: 22pt; margin-bottom: 2pt; }
+.tpl-horizon .r-ring[data-level="4"]::after { inset: 3pt; }
+.tpl-horizon .r-ring[data-level="3"]::after { inset: 4.6pt; }
+.tpl-horizon .r-ring[data-level="2"]::after { inset: 6.2pt; }
+.tpl-horizon .r-ring[data-level="1"]::after { inset: 7.6pt; }
+.tpl-horizon .r-rings .r-e-t { font-size: 9.6pt; line-height: 12pt; }
+.tpl-horizon .r-rings .r-e-s { font-size: 8.2pt; line-height: 10.5pt; }
+.tpl-horizon .h-contact { grid-template-columns: repeat(3, auto); justify-content: space-between; gap: 3pt 18pt; }
+.tpl-horizon { line-height: calc(12pt + (var(--sp) - 1) * 4pt); }
+.tpl-horizon .r-sec { margin-top: 8pt; padding-top: 8pt; }
+.tpl-horizon .r-h { margin-bottom: 4pt; line-height: 18pt; }
+.tpl-horizon .r-ico { width: 18pt; height: 18pt; padding: 2.6pt; }
+.tpl-horizon [data-sec="experience"] > .r-body { margin-left: 8pt; }
+.tpl-horizon [data-sec="experience"] .r-h-cont { margin-left: -25.6pt; }

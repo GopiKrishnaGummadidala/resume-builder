@@ -193,6 +193,30 @@ A photo needs the full 256-colour palette (with fewer, skin tones show bands), w
 
 **Cost:** none visible. The remaining size of a dense multi-page CV comes from the sharp edges of a lot of text in a bitmap (see decision 4); real vector text would be the fix.
 
-## 17. Container hardening
+## 17. Real text in the PDF
+
+**Decision:** for fonts the app can embed (Hind so far), the PDF holds the words as real text in that font, and only backgrounds, bands, chips, icons and the photo as pictures. Decision 4 is kept as the fallback for other fonts.
+
+The page is still laid out by the browser, so it looks like the preview: every word's position, size, weight, colour and slant is measured on the rendered page and written at that spot (pdf-text.js). The picture underneath is taken with all text transparent, so nothing is drawn twice.
+
+| | Picture of the page (decision 4) | **Real text** (chosen where the font can be embedded) |
+|---|---|---|
+| Dense two-page CV with a photo | 492 KB | **about 130 KB** (the CV's own original: 123 KB) |
+| Zoom | soft beyond 192 dpi | sharp at any zoom |
+| Applicant tracking systems | invisible text layer in Helvetica, accents mapped to Latin-1 | the visible text itself, in reading order, with "•" bullets and bold |
+
+Details that matter for applicant tracking systems:
+- **Reading order** is document order: header, main column, side column.
+- **Spaces** are written only where the text has them, so "**Python**." stays one word.
+- **A word broken over two lines** at a hyphen is written as two parts, each on its own line.
+- **CSS decorations** ("|" separators, "// " prefixes) stay in the picture and never become text.
+- **Widely letter-spaced headings** stay in the picture with an invisible, normally spaced copy; written letter by letter they reach a parser as "S U M M A R Y".
+- **Characters the font lacks** are replaced by a close one or left out.
+
+**Fonts:** Hind's five weights are bundled under `fonts/` (SIL Open Font License, licence file included) and fetched from the app's own origin when a PDF is built; the Content-Security-Policy already allows that. Only the characters used are embedded. Other fonts can be added the same way; until then they use decision 4.
+
+**Cost:** the font files add about 1.4 MB to the repository and the image (loaded only when a PDF is built). Synthetic italics are slanted text, as in the browser.
+
+## 18. Container hardening
 
 nginx runs from the unprivileged image as uid 101 on a read-only filesystem with all capabilities dropped. The server only reads files, so it is given the ability to do nothing else. A Content-Security-Policy limits scripts to the site itself and cdnjs. The browser tests run against the container in CI specifically to prove the policy does not break PDF export or import.

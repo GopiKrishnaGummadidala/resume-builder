@@ -107,7 +107,7 @@ export function coachLetter(l) {
 
 /** ATS check on raw resume text (pasted, uploaded PDF, or a saved CV). */
 export function atsCheck(text) {
-  const t = text || '';
+  const t = (text || '').replace(/\*\*/g, ''); // bold markers from an imported PDF are not words
   const lower = t.toLowerCase();
   const words = t.split(/\s+/).filter(Boolean);
   const lines = t.split('\n').map(s => s.trim()).filter(Boolean);

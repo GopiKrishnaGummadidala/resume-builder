@@ -17,6 +17,12 @@ export function fitPages(root = document) {
 export const pageObserver = new ResizeObserver(() => fitPages());
 window.addEventListener('resize', () => fitPages());
 
+/**
+ * A small, non-interactive picture of a document for cards. Its contact links become plain spans:
+ * the card itself is a link, and a link inside a link makes the browser close the card's link early,
+ * which pushed the preview out of its box.
+ */
 export function miniPreview(doc) {
-  return `<div class="page-fit mini">${renderDoc(doc)}</div>`;
+  const html = renderDoc(doc).replace(/<a(\s[^>]*)?>/g, '<span$1>').replace(/<\/a>/g, '</span>');
+  return `<div class="page-fit mini">${html}</div>`;
 }

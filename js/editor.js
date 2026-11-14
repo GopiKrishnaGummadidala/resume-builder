@@ -3,10 +3,10 @@
 // same in-memory document; every change is saved through the store.
 import {
   draftLetterBody, THEME_COLORS, FONTS, uid, splitLines, DEFAULT_PERSONAL, LETTER_TITLE, letterTitle,
-  PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, validPhoto, splitList,
+  PAGE_SIZES, SPACING_STEPS, MARGIN_STEPS, DEFAULT_SPACING, DEFAULT_MARGIN, pageSize, validPhoto, splitList, cleanTags, TAG_LIMITS,
 } from './data.js';
 import { store } from './store.js';
-import { TEMPLATES, renderDoc, esc, letterBlocks } from './templates.js';
+import { TEMPLATES, renderDoc, esc, letterBlocks, sectionLayout } from './templates.js';
 import { coachResume, coachLetter, strengthenBullet } from './analysis.js';
 import { htmlToLetterText, editableToLetterText, editableToLines, toggleBold, toggleHeading, editableBold, editableHeading } from './richtext.js';
 import { $, $$, toast, confirmDialog, fileNameDialog, setPath, getPath } from './ui.js';
@@ -158,6 +158,31 @@ function coachPanel(doc) {
 }
 
 /** Layout, Fonts and Themes menus. Each is a <details> so it opens and closes without script. */
+const SECTION_NAMES = {
+  summary: 'Summary', experience: 'Work experience', projects: 'Projects', education: 'Education', skills: 'Skills',
+  certifications: 'Certificates', languages: 'Languages', achievements: 'Achievements', interests: 'Interests',
+};
+
+/** The Sections menu: each section with up/down buttons and, in two-column templates, a button to change column. */
+function sectionsPanel(doc) {
+  const L = sectionLayout(doc);
+  const row = (k, i, keys, col) => {
+    const name = SECTION_NAMES[k] || k;
+    const other = col === 'main' ? 'side' : 'main';
+    return `<li class="sec-row"><span>${name}</span>
+      <button type="button" class="icon-btn" data-sec-move="up" data-key="${k}" ${i === 0 ? 'disabled' : ''} aria-label="Move ${name} up" title="Move up">↑</button>
+      <button type="button" class="icon-btn" data-sec-move="down" data-key="${k}" ${i === keys.length - 1 ? 'disabled' : ''} aria-label="Move ${name} down" title="Move down">↓</button>
+      ${L.twoCol ? `<button type="button" class="btn btn-sm btn-ghost" data-sec-col="${k}" aria-label="Move ${name} to the ${other} column">${col === 'main' ? 'To side' : 'To main'}</button>` : ''}
+    </li>`;
+  };
+  const list = (keys, col, title) => `<div class="sec-col">${title ? `<p class="sec-col-h">${title}</p>` : ''}<ol class="sec-list">${
+    keys.map((k, i) => row(k, i, keys, col)).join('') || '<li class="muted small">No sections here</li>'}</ol></div>`;
+  return `${L.twoCol ? list(L.main, 'main', 'Main column') + list(L.side, 'side', 'Side column') : list(L.main, 'main', '')}
+    ${L.inHeader.length ? '<p class="muted small">This template shows your summary in the header.</p>' : ''}
+    <p class="muted small">Your order stays when you switch templates.</p>
+    <button type="button" class="btn btn-sm btn-ghost" data-sec-reset ${doc.sections ? '' : 'disabled'}>Use the template's order</button>`;
+}
+
 function toolbarMenus(doc) {
   const range = (role, label, steps, value) => `<label class="tb-range"><span>${label}</span>
       <input type="range" data-role="${role}" min="1" max="${steps.length}" step="1" value="${value}" aria-label="${label}">
@@ -169,9 +194,15 @@ function toolbarMenus(doc) {
         <fieldset class="tb-size"><legend>Page size</legend>
           ${Object.entries(PAGE_SIZES).map(([id, s]) => `<label><input type="radio" name="page-size" data-role="size" value="${id}" ${pageSize(doc) === s ? 'checked' : ''}> ${s.label}</label>`).join('')}
         </fieldset>
+        <label class="tb-check"><input type="checkbox" data-role="icons" ${doc.theme.icons !== false ? 'checked' : ''}> Show icons <span class="muted small">(section, contact and interest icons)</span></label>
+        <label class="tb-check"><input type="checkbox" data-role="full-links" ${doc.theme.fullLinks !== false ? 'checked' : ''}> Full profile links <span class="muted small">(linkedin.com/in/… instead of the handle; ATS-friendly)</span></label>
+        <label class="tb-check"><input type="checkbox" data-role="profile-heading" ${doc.theme.profileHeading !== false ? 'checked' : ''}> Profile heading <span class="muted small">(over a summary in the header; ATS-friendly)</span></label>
         <button type="button" class="btn btn-sm btn-ghost" data-act="layout-reset">Reset layout</button>
       </div>
     </details>
+    ${doc.type === 'cover' ? '' : `<details class="tb-menu" data-menu="sections"><summary class="btn btn-sm btn-ghost">Sections</summary>
+      <div class="tb-pop tb-sections">${sectionsPanel(doc)}</div>
+    </details>`}
     <details class="tb-menu" data-menu="fonts"><summary class="btn btn-sm btn-ghost">Fonts</summary>
       <div class="tb-pop tb-list">
         ${FONTS.map(f => `<button type="button" class="tb-option ${f.id === doc.theme.font ? 'active' : ''}" data-act="font" data-font="${f.id}" style="font-family:${esc(f.css)}">${esc(f.label)}</button>`).join('')}
@@ -208,6 +239,15 @@ try {
 } catch { /* no saved preference, or storage is unavailable */ }
 const savePanels = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(panels)); } catch { /* not remembered */ } };
 
+/** The document's tags, each with a remove button. */
+const tagChips = doc => (doc.tags || []).map(t => `<span class="tag-chip">${esc(t)}<button type="button" data-tag-remove="${esc(t)}" aria-label="Remove tag ${esc(t)}" title="Remove tag">×</button></span>`).join('');
+/** Tags used on other documents and not on this one, offered while typing. */
+const tagOptions = doc => {
+  const mine = new Set((doc.tags || []).map(t => t.toLowerCase()));
+  const all = [...new Set(store.docs.flatMap(d => d.tags || []))].filter(t => !mine.has(t.toLowerCase()));
+  return all.sort((a, b) => a.localeCompare(b)).map(t => `<option value="${esc(t)}"></option>`).join('');
+};
+
 export function editorPage(id) {
   const doc = store.get(id);
   if (!doc) return `<section class="section"><h1>Document not found</h1><a class="btn btn-primary" href="#documents">Back to my documents</a></section>`;
@@ -216,6 +256,7 @@ export function editorPage(id) {
     <div class="ed-toolbar no-print">
       <a class="btn btn-sm btn-ghost" href="#documents">← Documents</a>
       <input class="title-input" data-path="title" value="${esc(doc.title)}" aria-label="Document name">
+      <div class="doc-tags" role="group" aria-label="Tags"><span class="tag-list">${tagChips(doc)}</span><input class="tag-input" list="tag-suggest" maxlength="${TAG_LIMITS.length}" placeholder="+ Tag" aria-label="Add a tag, such as .NET or Angular" title="Tags help you find versions of this document in My documents (Enter to add)"><datalist id="tag-suggest">${tagOptions(doc)}</datalist></div>
       <div class="tb-group">
         <button class="icon-btn" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
         <button class="icon-btn" data-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo" disabled>↷</button>
@@ -337,13 +378,48 @@ export function mountEditor() {
     $('[data-role="margin"]', root).value = doc.theme.margin;
     $('[data-role="color"]', root).value = doc.theme.color;
     $$('[data-role="size"]', root).forEach(r => (r.checked = PAGE_SIZES[r.value] === pageSize(doc)));
+    $('[data-role="icons"]', root).checked = doc.theme.icons !== false;
+    $('[data-role="full-links"]', root).checked = doc.theme.fullLinks !== false;
+    $('[data-role="profile-heading"]', root).checked = doc.theme.profileHeading !== false;
     $$('.swatch', root).forEach(s => s.classList.toggle('active', s.dataset.color === doc.theme.color));
     $$('[data-act="font"]', root).forEach(f => f.classList.toggle('active', f.dataset.font === doc.theme.font));
   };
+  // Tags: Enter or a comma adds what was typed, Backspace in an empty box removes the last one.
+  const renderTags = () => {
+    $('.tag-list', root).innerHTML = tagChips(doc);
+    $('#tag-suggest', root).innerHTML = tagOptions(doc);
+  };
+  const addTag = input => {
+    const value = input.value.trim();
+    input.value = '';
+    if (!value) return;
+    const before = (doc.tags || []).length;
+    doc.tags = cleanTags([...(doc.tags || []), value]);
+    if (doc.tags.length === before) toast(before >= TAG_LIMITS.count ? `Up to ${TAG_LIMITS.count} tags` : 'Already tagged');
+    renderTags();
+    commit();
+  };
+  root.addEventListener('keydown', e => {
+    if (!e.target.matches('.tag-input')) return;
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(e.target); }
+    else if (e.key === 'Backspace' && !e.target.value && doc.tags?.length) { doc.tags = doc.tags.slice(0, -1); renderTags(); commit(); }
+  });
+  root.addEventListener('change', e => { if (e.target.matches('.tag-input')) addTag(e.target); });
+  root.addEventListener('click', e => {
+    const b = e.target.closest('[data-tag-remove]');
+    if (!b) return;
+    doc.tags = (doc.tags || []).filter(t => t !== b.dataset.tagRemove);
+    renderTags();
+    commit();
+    $('.tag-input', root).focus();
+  });
+
   const restore = snap => {
     if (!snap) return;
     Object.assign(doc, JSON.parse(snap), { updatedAt: doc.updatedAt });
     syncToolbar();
+    renderTags();
+    renderSections();
     rerenderForm();
   };
   const undo = () => { recordNow(); restore(history.undo()); };
@@ -360,6 +436,52 @@ export function mountEditor() {
   root.addEventListener('toggle', e => { if (e.target.open && e.target.classList?.contains('tb-menu')) closeMenus(e.target); }, true);
   root.addEventListener('click', e => { if (!e.target.closest('.tb-menu')) closeMenus(); });
   root.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
+
+  // Sections menu. Registered after the menu-closing click handler, which must still see the clicked
+  // button inside its menu before the menu's content is redrawn.
+  function renderSections(focus) {
+    const pop = $('.tb-sections', root);
+    if (!pop) return;
+    pop.innerHTML = sectionsPanel(doc);
+    if (focus) (pop.querySelector(focus) || pop.querySelector('button:not([disabled])'))?.focus();
+  }
+  /** Save a new arrangement; the summary keeps its place in the order even while a template shows it in the header. */
+  const saveSections = (L, main, side) => {
+    const order = [...main, ...side];
+    if (L.inHeader.length) order.splice(Math.max(0, doc.sections?.order?.indexOf('summary') ?? 0), 0, ...L.inHeader);
+    doc.sections = L.twoCol ? { order, side } : doc.sections?.side ? { order, side: doc.sections.side } : { order };
+  };
+  root.addEventListener('click', e => {
+    const move = e.target.closest('[data-sec-move]');
+    const col = e.target.closest('[data-sec-col]');
+    const reset = e.target.closest('[data-sec-reset]');
+    if (!move && !col && !reset) return;
+    let focus = '';
+    if (reset) {
+      delete doc.sections;
+    } else {
+      const L = sectionLayout(doc);
+      const main = [...L.main];
+      const side = [...L.side];
+      const key = (move || col).dataset.key || col?.dataset.secCol;
+      const list = main.includes(key) ? main : side;
+      const i = list.indexOf(key);
+      if (move) {
+        const j = move.dataset.secMove === 'up' ? i - 1 : i + 1;
+        if (j < 0 || j >= list.length) return;
+        [list[i], list[j]] = [list[j], list[i]];
+        focus = `[data-sec-move="${move.dataset.secMove}"][data-key="${key}"]`;
+      } else {
+        list.splice(i, 1);
+        (list === main ? side : main).push(key);
+        focus = `[data-sec-col="${key}"]`;
+      }
+      saveSections(L, main, side);
+    }
+    renderSections(focus);
+    refresh();
+    commit();
+  });
 
   // Layout sliders and the custom colour act while they are dragged.
   root.addEventListener('input', e => {
@@ -518,8 +640,11 @@ export function mountEditor() {
   });
   root.addEventListener('change', e => {
     const role = e.target.dataset.role;
-    if (role === 'template') doc.templateId = e.target.value;
+    if (role === 'template') { doc.templateId = e.target.value; renderSections(); }
     else if (role === 'size') doc.theme.size = e.target.value;
+    else if (role === 'icons') doc.theme.icons = e.target.checked;
+    else if (role === 'full-links') doc.theme.fullLinks = e.target.checked;
+    else if (role === 'profile-heading') doc.theme.profileHeading = e.target.checked;
     else if (role === 'photo') { setPhoto(e.target.files?.[0]); return; }
     else return;
     refresh();
@@ -545,7 +670,7 @@ export function mountEditor() {
     else if (act === 'color' || act === 'font' || act === 'layout-reset') {
       if (act === 'color') doc.theme.color = b.dataset.color;
       else if (act === 'font') doc.theme.font = b.dataset.font;
-      else Object.assign(doc.theme, { spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN, size: 'a4' });
+      else Object.assign(doc.theme, { spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN, size: 'a4', icons: true, fullLinks: true, profileHeading: true });
       syncToolbar();
       refresh();
       commit();

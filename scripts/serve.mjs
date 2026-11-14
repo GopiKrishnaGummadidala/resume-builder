@@ -10,9 +10,10 @@ const port = Number(process.argv[2] || process.env.PORT || 5180);
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png',
+  '.ttf': 'font/ttf',
 };
 // Only the app's own files are served; nothing else in the repository is reachable.
-const PUBLIC = [/^\/index\.html$/, /^\/artifact\.html$/, /^\/css\/[\w.-]+\.css$/, /^\/js\/[\w.-]+\.js$/];
+const PUBLIC = [/^\/index\.html$/, /^\/artifact\.html$/, /^\/css\/[\w.-]+\.css$/, /^\/js\/[\w.-]+\.js$/, /^\/fonts\/[\w-]+\/[\w.-]+\.ttf$/];
 
 http.createServer(async (req, res) => {
   let pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
