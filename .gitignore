@@ -11,3 +11,6 @@ js/profile.local.js
 node_modules/
 test-results/
 playwright-report/
+
+# Local secrets (docker compose)
+.env

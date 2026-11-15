@@ -1,4 +1,6 @@
-# One command:  docker compose up -d --build   ->  http://localhost:8090
+# One command:  cp .env.example .env  (set POSTGRES_PASSWORD), then  docker compose up -d --build
+#               -> http://localhost:8090
+# web: nginx serves the app and passes /api/ to api. api: accounts and documents. db: PostgreSQL.
 services:
   web:
     build: .
@@ -6,8 +8,10 @@ services:
     container_name: craftfolio
     ports:
       - "${CRAFTFOLIO_PORT:-8090}:8080"
+    depends_on:
+      - api
     restart: unless-stopped
-    # The container only serves files, so it gets no write access and no extra privileges.
+    # The container only serves files and forwards /api/, so it gets no write access and no extra privileges.
     read_only: true
     tmpfs:
       - /tmp
@@ -15,3 +19,48 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: craftfolio-api:latest
+    container_name: craftfolio-api
+    environment:
+      DATABASE_URL: postgres://craftfolio:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}@db:5432/craftfolio
+      TRUST_PROXY: "1"
+      COOKIE_SECURE: ${COOKIE_SECURE:-auto}
+      # Optional: turns on "Tailor with Claude". Without it, tailoring works by copy and paste.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.5}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  db:
+    image: postgres:16-alpine
+    container_name: craftfolio-db
+    environment:
+      POSTGRES_USER: craftfolio
+      POSTGRES_DB: craftfolio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
+    volumes:
+      - craftfolio-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U craftfolio -d craftfolio"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  craftfolio-db:

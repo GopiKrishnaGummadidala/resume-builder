@@ -2,21 +2,22 @@
 
 [![CI](https://github.com/GopiKrishnaGummadidala/resume-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/GopiKrishnaGummadidala/resume-builder/actions/workflows/ci.yml)
 
-A CV and cover letter builder that runs entirely in the browser. There is no backend: the server only serves static files, and documents stay in the visitor's own browser. Inspired by the feature set of online resume builders such as novoresume.com.
+A CV and cover letter builder that runs in the browser. Without an account, documents stay in the visitor's own browser. With the optional API server (`server/`, PostgreSQL), people can create an account, sign in with email and password, and keep their documents on any device. Inspired by the feature set of online resume builders such as novoresume.com.
 
 ## Run with Docker Compose
 
 ```bash
+cp .env.example .env      # then set POSTGRES_PASSWORD (letters and digits)
 docker compose up -d --build
 ```
 
-Then open http://localhost:8090. The image is nginx (non-root, read-only filesystem) serving the static files.
+Then open http://localhost:8090. Three containers: **web** (nginx, non-root, read-only filesystem) serves the app and passes `/api/` to **api** (Node.js, accounts and documents), which stores them in **db** (PostgreSQL 16, volume `craftfolio-db`, not published on the host).
 
 - Change the port: `CRAFTFOLIO_PORT=9000 docker compose up -d`
 - Rebuild after editing files: `docker compose up -d --build`
 - Stop: `docker compose down`
 
-Documents are saved in each visitor's browser (localStorage), so the container keeps no data and needs no volume.
+Guests' documents stay in their browser (localStorage). Signed-in users' documents are in PostgreSQL; the browser keeps a working copy so editing stays fast and works offline. Back up the database with `docker compose exec db pg_dump -U craftfolio craftfolio > backup.sql`.
 
 ## Run without Docker
 
@@ -24,7 +25,40 @@ Documents are saved in each visitor's browser (localStorage), so the container k
 npm run serve
 ```
 
-Then open http://localhost:5180. Any static file server works (for example `python -m http.server 5180`). The app must be served over HTTP; browsers do not load ES modules from `file://`.
+Then open http://localhost:5180. Any static file server works (for example `python -m http.server 5180`). The app must be served over HTTP; browsers do not load ES modules from `file://`. Served this way there is no API, so the app runs without accounts.
+
+With accounts, against your own PostgreSQL (the server creates its tables on start):
+
+```bash
+DATABASE_URL=postgres://craftfolio:secret@localhost:5432/craftfolio STATIC_DIR=. PORT=5181 node server/index.js
+```
+
+Then open http://localhost:5181 (the server also serves the app when `STATIC_DIR` is set).
+
+## Tailor a CV and cover letter to a job (AI)
+
+Open **Tailor** on a CV card (or **Tailor to job** in the editor), give the job ad, choose a template for the CV and one for the cover letter, and get a tailored **copy** of the CV plus a **one-page cover letter**, each with a Download PDF button.
+
+- **The job ad:** paste its text, or (signed in) give its link and **Fetch**: the server reads the page, from its JobPosting data when the site publishes it. Pages behind a login or built only with JavaScript cannot be read; paste their text. The fetch refuses private and local addresses (checked when connecting, also after redirects), only uses the standard ports, and stops at 10 s or 3 MB.
+- **One page:** the letter is written to 230–330 words; when a template's spacing still makes it spill over, spacing and then margins are tightened until it fits. Every cover letter download is fitted the same way.
+
+In step 3 you choose the AI with a radio button, then press **Generate**:
+
+- **Connected (one click):** **Claude** when the server has `ANTHROPIC_API_KEY` (Claude Opus 5.5, or `TAILOR_MODEL`), **ChatGPT** when it has `OPENAI_API_KEY` (`gpt-5.5`, or `OPENAI_MODEL`); set them in `.env` (see `.env.example`). Both use structured output, run for signed-in users only, 20 tailorings per user per hour; each one is billed to that key. Without a key the option is shown greyed out with the reason.
+- **On the AI's website (free):** ChatGPT, Claude or Gemini. Generate copies the prompt and opens the site; paste the prompt there, then paste its answer back and it is checked at once. No key and no account needed.
+
+The AI may only rewrite the headline and summary, reword and reorder each job's bullets, and reorder skills. Its answer is then checked against the CV (`js/tailor.js`): a change that uses a number the CV does not contain is left out, skills the CV does not mention are not added, no skill is removed, every job keeps its employer, title, dates and most of its bullets, and the cover letter may use only the CV's facts and numbers, with no placeholders. You review each change before the copy is made; the original CV is never changed. Only CV content is sent to the AI: no name, contact details or photo.
+
+## Accounts
+
+- **Sign-in:** email and password. Passwords are stored only as scrypt hashes; at least 10 characters.
+- **Sessions:** a random token in an HttpOnly, SameSite=Lax cookie (Secure over HTTPS), valid 30 days; the database keeps only its SHA-256. Signing out ends the session and removes the account's working copy from that browser.
+- **Forgery protection:** every request that changes data must carry `X-Craftfolio: 1` and come from the same origin.
+- **Brute force:** sign-in attempts are limited per address and per account, sign-ups per address (in memory, per server process).
+- **Sync:** edits are sent after a short pause; changes from other devices are fetched when the tab regains focus and every minute. The newer copy of a document wins, and a deletion wins over older edits, the same rules as between browser tabs (docs/concurrency.md).
+- **Guests:** the app works without an account. On sign-up or sign-in, documents made in that browser are offered to move into the account.
+- **Limits:** 500 documents per account, 1 MB per document.
+- **API:** `server/app.js` lists the endpoints; the schema is in `server/migrations/`.
 
 ## Features
 
@@ -115,4 +149,4 @@ Dockerfile, nginx.conf, docker-compose.yml
 
 ## Not included
 
-Accounts, cloud sync, payments, and language-model writing. The coaching features are rule-based and run locally; `draftLetterBody` and `strengthenBullet` are where a model could be plugged in.
+Password reset by email, other sign-in methods (Google and so on), payments, and language-model writing. The coaching features are rule-based and run locally; `draftLetterBody` and `strengthenBullet` are where a model could be plugged in.

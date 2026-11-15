@@ -1,4 +1,5 @@
-// Persistence: all documents live in one localStorage entry in this browser.
+// Persistence: all documents live in one localStorage entry in this browser: one for guests, and
+// one per signed-in account (its working copy; js/account.js keeps it in step with the server).
 //
 // Several tabs can have the app open at once, each with its own in-memory copy. To stop one tab
 // overwriting the work of another, every save is read-merge-write: documents are merged per id and
@@ -47,11 +48,15 @@ export function mergeStates(mine, theirs, now = Date.now()) {
   return { schema: SCHEMA, docs, deleted };
 }
 
+/** The localStorage entry of a signed-in account's working copy. */
+export const accountKey = userId => `${STORAGE_KEY}.u.${userId}`;
+
 /** Storage backend; swappable so the store can be unit-tested without a browser. */
-function browserBackend() {
+export function browserBackend(key = STORAGE_KEY) {
   return {
-    read() { try { return localStorage.getItem(STORAGE_KEY); } catch { return null; } },
-    write(value) { localStorage.setItem(STORAGE_KEY, value); }, // may throw (quota, blocked storage)
+    key,
+    read() { try { return localStorage.getItem(key); } catch { return null; } },
+    write(value) { localStorage.setItem(key, value); }, // may throw (quota, blocked storage)
   };
 }
 
@@ -67,6 +72,18 @@ export function createStore(backend = typeof window === 'undefined' ? memoryBack
   let failing = false;
   const listeners = new Set();
   const errorListeners = new Set();
+  const savedListeners = new Set();
+
+  /** Fold another copy of the documents in; tell subscribers which ids changed. */
+  function foldIn(theirs) {
+    const before = new Map(state.docs.map(d => [d.id, d.updatedAt]));
+    state = mergeStates(state, theirs);
+    const after = new Map(state.docs.map(d => [d.id, d.updatedAt]));
+    const changed = new Set();
+    for (const [id, ts] of after) if (before.get(id) !== ts) changed.add(id);
+    for (const id of before.keys()) if (!after.has(id)) changed.add(id);
+    return changed;
+  }
 
   function persist() {
     clearTimeout(timer);
@@ -75,6 +92,7 @@ export function createStore(backend = typeof window === 'undefined' ? memoryBack
     try {
       backend.write(JSON.stringify(state));
       failing = false;
+      savedListeners.forEach(fn => fn());
     } catch (err) {
       if (!failing) errorListeners.forEach(fn => fn(err)); // report once per failure streak
       failing = true;
@@ -89,6 +107,23 @@ export function createStore(backend = typeof window === 'undefined' ? memoryBack
 
   const api = {
     get docs() { return state.docs; },
+    /** id -> deletion time, for documents deleted recently (tombstones). */
+    get deleted() { return state.deleted; },
+    /** The storage entry in use. */
+    get key() { return backend.key; },
+    /** Switch to another storage entry (signing in or out) and load what it holds. */
+    use(next) {
+      if (timer) persist();
+      backend = next;
+      state = parseState(backend.read());
+    },
+    /** Fold in the account's documents from the server; returns the ids that changed here. */
+    mergeRemote(remote) {
+      const changed = foldIn(parseState(JSON.stringify({ docs: remote?.docs || [], deleted: remote?.deleted || {} })));
+      persist();
+      if (changed.size) listeners.forEach(fn => fn(changed));
+      return changed;
+    },
     get(id) { return state.docs.find(d => d.id === id); },
     add(doc) { upsert(doc); persist(); return doc; },
     /** Record an edit to `doc` and write immediately. */
@@ -117,13 +152,8 @@ export function createStore(backend = typeof window === 'undefined' ? memoryBack
     },
     /** Another tab changed storage: fold its changes in. Returns the ids whose content changed here. */
     syncFromStorage() {
-      const before = new Map(state.docs.map(d => [d.id, d.updatedAt]));
       const theirs = parseState(backend.read());
-      state = mergeStates(state, theirs);
-      const after = new Map(state.docs.map(d => [d.id, d.updatedAt]));
-      const changed = new Set();
-      for (const [id, ts] of after) if (before.get(id) !== ts) changed.add(id);
-      for (const id of before.keys()) if (!after.has(id)) changed.add(id);
+      const changed = foldIn(theirs);
       // Self-heal: if storage lacks something this tab has (two tabs wrote at the same moment and
       // one write was overwritten), write the merged state back. Tabs converge: the other tab then
       // sees nothing new and does not write again.
@@ -138,6 +168,8 @@ export function createStore(backend = typeof window === 'undefined' ? memoryBack
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     /** fn(err) is called when saving fails (storage full or blocked). */
     onError(fn) { errorListeners.add(fn); return () => errorListeners.delete(fn); },
+    /** fn() is called after every successful write (the account sync sends the changes). */
+    onSaved(fn) { savedListeners.add(fn); return () => savedListeners.delete(fn); },
   };
   return api;
 }
@@ -145,7 +177,7 @@ export function createStore(backend = typeof window === 'undefined' ? memoryBack
 export const store = createStore();
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('storage', e => { if (e.key === STORAGE_KEY || e.key === null) store.syncFromStorage(); });
+  window.addEventListener('storage', e => { if (e.key === store.key || e.key === null) store.syncFromStorage(); });
   // Typing saves after a short pause; make sure that pause never loses the last keystrokes.
   window.addEventListener('pagehide', () => store.flush());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') store.flush(); });

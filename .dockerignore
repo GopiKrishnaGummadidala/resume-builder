@@ -16,3 +16,9 @@ eslint.config.js
 playwright.config.js
 playwright-report
 test-results
+# The API has its own image (Dockerfile.api); secrets never go into an image.
+server
+Dockerfile.api
+Dockerfile.api.dockerignore
+.env
+.env.*

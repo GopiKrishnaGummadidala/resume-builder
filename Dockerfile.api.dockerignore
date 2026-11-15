@@ -1,0 +1,7 @@
+# The API image needs only package*.json, server/ and js/data.js.
+*
+!package.json
+!package-lock.json
+!server/**
+!js/data.js
+!js/tailor.js

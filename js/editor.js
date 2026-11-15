@@ -12,10 +12,12 @@ import { htmlToLetterText, editableToLetterText, editableToLines, toggleBold, to
 import { $, $$, toast, confirmDialog, fileNameDialog, setPath, getPath } from './ui.js';
 import { saveFile } from './platform.js';
 import { buildPdf, pdfName } from './pdf-export.js';
+import { fitOnePage } from './fit.js';
 import { fitPages, pageObserver } from './preview.js';
 import { createHistory } from './history.js';
 import { paginate, unpaginate } from './paginate.js';
 import { fileToPhoto } from './photo.js';
+import { fileToDoc } from './importer.js';
 
 function field(label, path, doc, opts = {}) {
   const v = getPath(doc, path) ?? '';
@@ -271,9 +273,11 @@ export function editorPage(id) {
       <nav class="ed-rail no-print" aria-label="Editor tools">
         <button type="button" class="rail-btn" data-act="panel" data-panel="form" aria-pressed="${panels.form}"><span class="rail-ico" aria-hidden="true">☰</span><span>All fields</span></button>
         <button type="button" class="rail-btn" data-act="panel" data-panel="coach" aria-pressed="${panels.coach}"><span class="rail-ico" aria-hidden="true">◔</span><span>Coach</span><span class="rail-badge" id="rail-score"></span></button>
-        ${doc.type !== 'cover' ? `<a class="rail-btn" href="#match-${doc.id}"><span class="rail-ico" aria-hidden="true">⇄</span><span>Match to job</span></a>
+        ${doc.type !== 'cover' ? `<a class="rail-btn" href="#tailor-${doc.id}"><span class="rail-ico" aria-hidden="true">✦</span><span>Tailor to job</span></a>
+        <a class="rail-btn" href="#match-${doc.id}"><span class="rail-ico" aria-hidden="true">⇄</span><span>Match to job</span></a>
         <a class="rail-btn" href="#ats"><span class="rail-ico" aria-hidden="true">✓</span><span>ATS checker</span></a>` : ''}
         <a class="rail-btn" href="#templates${doc.type === 'cover' ? '-cover' : ''}"><span class="rail-ico" aria-hidden="true">▦</span><span>Templates</span></a>
+        ${doc.type !== 'cover' ? `<label class="rail-btn" title="Fill this CV from an existing CV (PDF, text or Craftfolio JSON). Its template and design stay."><span class="rail-ico" aria-hidden="true">⭱</span><span>Import CV</span><input type="file" accept=".pdf,.txt,.json" data-role="import-into" hidden></label>` : ''}
         <button type="button" class="rail-btn" data-act="export-json"><span class="rail-ico" aria-hidden="true">⭳</span><span>Export JSON</span></button>
       </nav>
       <div class="ed-form no-print" ${panels.form ? '' : 'hidden'}>${doc.type === 'cover' ? letterForm(doc) : resumeForm(doc)}</div>
@@ -646,10 +650,36 @@ export function mountEditor() {
     else if (role === 'full-links') doc.theme.fullLinks = e.target.checked;
     else if (role === 'profile-heading') doc.theme.profileHeading = e.target.checked;
     else if (role === 'photo') { setPhoto(e.target.files?.[0]); return; }
+    else if (role === 'import-into') { importInto(e.target); return; }
     else return;
     refresh();
     commit();
   });
+  /** Fill this CV from an imported one: its content changes, its template, design, tags and section order stay. */
+  const CONTENT = ['personal', 'summary', 'experience', 'education', 'skills', 'projects', 'certifications', 'languages', 'achievements', 'interests'];
+  async function importInto(input) {
+    const file = input.files?.[0];
+    input.value = ''; // the same file can be chosen again
+    if (!file) return;
+    const ok = await confirmDialog(
+      `Fill this CV with the content of “${file.name}”? Its template, colours, layout, tags and section order stay. You can undo this.`,
+      'Import into this CV',
+    );
+    if (!ok) return;
+    try {
+      toast(`Reading ${file.name}…`, 8000);
+      const imported = await fileToDoc(file);
+      if (imported.type === 'cover') throw new Error('that is a cover letter; choose a CV');
+      recordNow(); // so Undo brings back the content as it was
+      const photo = doc.personal?.photo || '';
+      for (const key of CONTENT) doc[key] = imported[key];
+      if (!doc.personal.photo && photo) doc.personal.photo = photo; // a file without a photo keeps the current one
+      rerenderForm();
+      toast('Imported into this CV. Check each section: reading a CV is best-effort. Undo brings back the old content.', 6000);
+    } catch (err) {
+      toast(`Import failed: ${err.message}`, 6000);
+    }
+  }
   async function setPhoto(file) {
     if (!file) return;
     try {
@@ -734,14 +764,27 @@ export function mountEditor() {
   refresh();
 }
 
-async function downloadPdf(doc, btn) {
+/**
+ * Download `doc` as a PDF, asking for the file name. A cover letter always goes out on one page: when
+ * it spills over, the PDF is made from a copy with tighter spacing and margins (the document is unchanged).
+ */
+export async function downloadPdf(doc, btn) {
   const filename = await fileNameDialog(pdfName(doc), 'pdf');
   if (!filename) return;
   const label = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = 'Building PDF…'; }
   try {
-    const { blob } = await buildPdf(doc, $('#print-area'), { title: filename.replace(/\.pdf$/, '') });
-    if (await saveFile(filename, blob)) toast(`Downloaded ${filename} (${Math.max(1, Math.round(blob.size / 1024))} KB)`);
+    let target = doc;
+    let note = '';
+    if (doc.type === 'cover') {
+      await document.fonts?.ready;
+      const fit = fitOnePage(doc);
+      target = fit.doc;
+      if (fit.pages > 1) note = ` It still runs to ${fit.pages} pages: shorten the letter to fit one.`;
+      else if (fit.changed) note = ' Spacing was tightened to keep it on one page.';
+    }
+    const { blob } = await buildPdf(target, $('#print-area'), { title: filename.replace(/\.pdf$/, '') });
+    if (await saveFile(filename, blob)) toast(`Downloaded ${filename} (${Math.max(1, Math.round(blob.size / 1024))} KB).${note}`, note ? 6000 : 2600);
   } catch (err) {
     toast(`PDF failed: ${err.message}`);
   } finally {

@@ -8,7 +8,7 @@
 //   2. Parsing (parseResumeText): the text is cut into sections at their headings and each section
 //      is turned into structured fields. It is best-effort: the result is meant to be reviewed.
 // Both steps are pure functions, tested without a browser. Only fileToText touches pdf.js.
-import { blankResume, uid, languageLevel } from './data.js';
+import { blankResume, uid, languageLevel, normalizeDoc } from './data.js';
 import { loadLib, libUrl } from './platform.js';
 import { squarePhoto } from './photo.js';
 
@@ -106,6 +106,22 @@ function imageSource(img) {
   }
   ctx.putImageData(out, 0, 0);
   return canvas;
+}
+
+/**
+ * Any file a person may import into a new document: a Craftfolio export (.json), or a CV as PDF or text.
+ * Always a new document with its own id, so an import never replaces an existing one.
+ */
+export async function fileToDoc(file) {
+  if (/.json$/i.test(file.name)) {
+    let parsed;
+    try { parsed = JSON.parse(await file.text()); } catch { throw new Error('the file is not valid JSON'); }
+    const doc = normalizeDoc(parsed);
+    if (!doc) throw new Error('this is not a Craftfolio export');
+    doc.id = uid();
+    return doc;
+  }
+  return importCv(file);
 }
 
 /** Read a CV file (PDF or text) into a new CV, including the photo of a PDF. */
