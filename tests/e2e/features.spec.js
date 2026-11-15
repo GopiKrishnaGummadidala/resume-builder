@@ -205,3 +205,36 @@ test.describe('import a CV', () => {
     await expect(page.locator('[data-role="t-doc"] option:checked')).toHaveText(/Alex Morgan/);
   });
 });
+
+test.describe('editing view matches the PDF', () => {
+  test('in every template, the page being edited breaks into the same pages as the printed one', async ({ page }) => {
+    const rows = await page.evaluate(async () => {
+      const { renderDoc, TEMPLATES } = await import('/js/templates.js');
+      const { paginate } = await import('/js/paginate.js');
+      const { sampleResume } = await import('/js/data.js');
+      await document.fonts.ready;
+      // Long enough to run over a page; entries with empty optional fields, as imported CVs have.
+      const base = sampleResume();
+      base.experience = [...base.experience, ...base.experience, ...base.experience].map((e, i) => ({ ...e, id: `job${i}abc`, location: i % 2 ? '' : e.location }));
+      base.education = [...base.education, { ...base.education[0], id: 'edu2abcd', location: '', details: '' }];
+      const measure = (doc, editable) => {
+        const host = document.body.appendChild(Object.assign(document.createElement('div'), { style: 'position:absolute;left:0;top:0;width:794px' }));
+        host.innerHTML = renderDoc(doc, { editable });
+        const p = host.querySelector('.page');
+        const pages = paginate(p, 1123);
+        const cols = [...p.querySelectorAll('.r-main, .r-side')].map(c => Math.round(c.getBoundingClientRect().height));
+        host.remove();
+        return { pages, cols };
+      };
+      return TEMPLATES.map(t => {
+        const doc = { ...base, templateId: t.id };
+        return { id: t.id, print: measure(doc, false), edit: measure(doc, true) };
+      });
+    });
+    for (const r of rows) {
+      expect(r.edit.pages, `${r.id}: pages`).toBe(r.print.pages);
+      // Editable text boxes round a little differently; anything more than that is a layout difference.
+      r.print.cols.forEach((h, i) => expect(Math.abs(r.edit.cols[i] - h), `${r.id}: column ${i + 1} ${r.edit.cols[i]} vs ${h}`).toBeLessThanOrEqual(3));
+    }
+  });
+});

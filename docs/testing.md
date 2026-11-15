@@ -6,8 +6,8 @@ Three layers, each catching what the one below cannot. All of them run in CI on 
 |---|---|---|---|---|
 | Lint | ESLint 9 | whole repo | Node | ~3 s |
 | Unit | Node's built-in test runner (`node --test`), no test libraries | 175 tests | Node, no browser | ~0.3 s |
-| Browser (end-to-end) | Playwright, Chromium | 60 tests | Real browser against the served app | ~15 s |
-| Container smoke | `curl` (site and API) + the same 60 browser tests against the Docker containers | | CI only | ~1 min |
+| Browser (end-to-end) | Playwright, Chromium | 61 tests | Real browser against the served app | ~15 s |
+| Container smoke | `curl` (site and API) + the same 61 browser tests against the Docker containers | | CI only | ~1 min |
 
 ## Running them
 

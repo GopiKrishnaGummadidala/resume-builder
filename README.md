@@ -95,7 +95,7 @@ npm ci
 |---|---|
 | `npm run lint` | ESLint over the app, tests and scripts |
 | `npm test` | 175 unit tests (Node's built-in runner, no browser) |
-| `npm run test:e2e` | 60 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
+| `npm run test:e2e` | 61 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
 | `npm run serve` | Static dev server on port 5180 |
 | `npm run load` | HTTP load test against the running container |
 | `node scripts/bench.mjs` | Timings for rendering, coaching, storage |
