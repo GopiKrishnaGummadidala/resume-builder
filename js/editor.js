@@ -12,7 +12,7 @@ import { htmlToLetterText, editableToLetterText, editableToLines, toggleBold, to
 import { $, $$, toast, confirmDialog, fileNameDialog, setPath, getPath } from './ui.js';
 import { saveFile } from './platform.js';
 import { buildPdf, pdfName } from './pdf-export.js';
-import { fitOnePage } from './fit.js';
+import { fitOnePage, fitToPages, pageCount } from './fit.js';
 import { fitPages, pageObserver } from './preview.js';
 import { createHistory } from './history.js';
 import { paginate, unpaginate } from './paginate.js';
@@ -191,6 +191,14 @@ function toolbarMenus(doc) {
       <span class="tb-ends muted small"><span>Min</span><span>Max</span></span></label>`;
   return `<details class="tb-menu" data-menu="layout"><summary class="btn btn-sm btn-ghost">Layout</summary>
       <div class="tb-pop">
+        <div class="tb-fit">
+          <p class="tb-fit-h"><span>Fit on</span><span class="muted small" data-role="page-count" aria-live="polite"></span></p>
+          <div class="tb-fit-btns">
+            <button type="button" class="btn btn-sm btn-ghost" data-act="fit" data-pages="1">1 page</button>
+            ${doc.type === 'cover' ? '' : '<button type="button" class="btn btn-sm btn-ghost" data-act="fit" data-pages="2">2 pages</button>'}
+          </div>
+          <p class="muted small">Tightens spacing, then margins, only as far as needed. Undo or Reset layout brings them back.</p>
+        </div>
         ${range('spacing', 'Content spacing', SPACING_STEPS, doc.theme.spacing ?? DEFAULT_SPACING)}
         ${range('margin', 'Page margins', MARGIN_STEPS, doc.theme.margin ?? DEFAULT_MARGIN)}
         <fieldset class="tb-size"><legend>Page size</legend>
@@ -438,6 +446,29 @@ export function mountEditor() {
   // Toolbar menus: only one open at a time; a click elsewhere or Escape closes them.
   const closeMenus = except => $$('.tb-menu[open]', root).forEach(m => { if (m !== except) m.open = false; });
   root.addEventListener('toggle', e => { if (e.target.open && e.target.classList?.contains('tb-menu')) closeMenus(e.target); }, true);
+
+  // Fit on N pages: tighten this document's spacing, then margins, only as far as needed.
+  const showPageCount = () => {
+    const el = $('[data-role="page-count"]', root);
+    if (el) { const n = pageCount(doc); el.textContent = `now ${n} page${n === 1 ? '' : 's'}`; }
+  };
+  root.addEventListener('toggle', e => { if (e.target.open && e.target.dataset?.menu === 'layout') showPageCount(); }, true);
+  async function fitTo(max) {
+    await document.fonts?.ready;
+    const fit = fitToPages(doc, max);
+    const want = `${max} page${max === 1 ? '' : 's'}`;
+    if (!fit.changed) toast(`It already fits on ${want}.`);
+    else if (fit.pages > max) {
+      toast(`Even at the tightest spacing and margins it needs ${fit.pages} pages. Shorten it to fit on ${want}; the layout is unchanged.`, 7000);
+    } else {
+      Object.assign(doc.theme, { spacing: fit.doc.theme.spacing, margin: fit.doc.theme.margin });
+      syncToolbar();
+      refresh();
+      commit();
+      toast(`Now on ${want}: spacing and margins tightened. Undo or Reset layout brings them back.`, 5000);
+    }
+    showPageCount();
+  }
   root.addEventListener('click', e => { if (!e.target.closest('.tb-menu')) closeMenus(); });
   root.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
 
@@ -704,6 +735,8 @@ export function mountEditor() {
       syncToolbar();
       refresh();
       commit();
+    } else if (act === 'fit') {
+      fitTo(Number(b.dataset.pages));
     } else if (act === 'remove-photo') {
       doc.personal.photo = '';
       rerenderForm();

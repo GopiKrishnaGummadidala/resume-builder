@@ -561,3 +561,10 @@ kbd { padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px;
 .t-start select { flex: 1; min-width: 0; }
 .t-start .btn { flex: none; }
 .t-step .field > label:first-child { font-weight: 600; font-size: 14px; }
+
+/* Layout menu: fit on 1 or 2 pages */
+.tb-fit { display: grid; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.tb-fit-h { display: flex; justify-content: space-between; align-items: baseline; margin: 0; font-weight: 600; font-size: 14px; }
+.tb-fit-btns { display: flex; gap: 6px; }
+.tb-fit-btns .btn { flex: 1; justify-content: center; }
+.tb-fit > p.muted { margin: 0; }

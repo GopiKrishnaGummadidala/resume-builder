@@ -21,21 +21,25 @@ export function pageCount(doc) {
 }
 
 /**
- * `doc` on one page: unchanged when it already fits, else a copy with tighter spacing, then tighter
- * margins (the Layout steps, down to the smallest). `pages` > 1 means even the tightest layout overflows.
+ * `doc` on at most `max` pages: unchanged when it already fits, else a copy with tighter spacing, then
+ * tighter margins (the Layout steps, one at a time, down to the smallest), stopping at the first that fits.
+ * `pages` > `max` means even the tightest layout overflows.
  * @returns {{doc: object, pages: number, changed: boolean}}
  */
-export function fitOnePage(doc) {
+export function fitToPages(doc, max) {
   let pages = pageCount(doc);
-  if (pages <= 1) return { doc, pages, changed: false };
+  if (pages <= max) return { doc, pages, changed: false };
   const t = structuredClone(doc);
   t.theme = { ...t.theme };
   for (const key of ['spacing', 'margin']) {
     while ((t.theme[key] ?? 1) > 1) {
       t.theme[key] = (t.theme[key] ?? 1) - 1;
       pages = pageCount(t);
-      if (pages <= 1) return { doc: t, pages, changed: true };
+      if (pages <= max) return { doc: t, pages, changed: true };
     }
   }
   return { doc: t, pages, changed: true };
 }
+
+/** A cover letter on one page (see fitToPages). */
+export const fitOnePage = doc => fitToPages(doc, 1);
