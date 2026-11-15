@@ -22,7 +22,14 @@ export function createOpenAITailor({ model = 'gpt-5.5' } = {}) {
         console.error('OpenAI API key rejected:', err.message);
         throw new TailorError(503, 'ChatGPT is not set up correctly on the server.');
       }
-      if (err instanceof OpenAI.RateLimitError) throw new TailorError(429, 'ChatGPT is busy or out of credit. Try again later, or pick another AI.');
+      if (err instanceof OpenAI.RateLimitError) {
+        console.error('OpenAI refused (429):', err.code || err.type || '', err.message);
+        // No paid credit on the API account (a ChatGPT Plus plan does not cover the API).
+        if (['insufficient_quota', 'credit_balance_exhausted'].some(c => err.code === c || err.type === c)) {
+          throw new TailorError(402, 'The OpenAI account behind this server has no API credit. Add credit at platform.openai.com (Billing), or pick a website option.');
+        }
+        throw new TailorError(429, 'ChatGPT is busy right now. Try again in a minute, or pick another AI.');
+      }
       if (err instanceof OpenAI.APIError) {
         console.error('OpenAI API error:', err.status, err.message);
         throw new TailorError(502, 'ChatGPT could not tailor the CV right now. Try again, or pick another AI.');
