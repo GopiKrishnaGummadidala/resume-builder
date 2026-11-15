@@ -7,7 +7,7 @@
 //   GET    /api/docs                               {docs, deleted}: every document of the user
 //   PUT    /api/docs/:id       {doc}               save a document (the newer copy wins)
 //   DELETE /api/docs/:id?at=ms                     delete a document (kept as a tombstone)
-//   GET    /api/tailor                             {providers: {claude, openai}}: which AIs are set up
+//   GET    /api/tailor                             {providers: {claude, openai, gemini}}: which AIs are set up
 //   POST   /api/tailor         {doc, job, provider} a tailoring plan from that AI (signed-in users)
 //   POST   /api/job-from-url   {url}               the job ad on a page: {description, role, company, source}
 //
@@ -76,7 +76,7 @@ function cookies(req) {
  * @param {boolean} [o.trustProxy] take the client address and protocol from X-Forwarded-* (behind nginx)
  * @param {string} [o.staticDir] also serve the app's files from here (development)
  * @param {Record<string, (doc: object, job: object) => Promise<object>>} [o.tailors] tailoring per AI that is set up:
- *   claude (server/tailor.js), openai (server/tailor-openai.js)
+ *   claude (server/tailor.js), openai (server/tailor-openai.js), gemini (server/tailor-gemini.js)
  */
 export function createApp({ db, secureCookies = 'auto', trustProxy = false, staticDir = '', tailors = {} }) {
   const loginByIp = rateLimiter({ max: 50, windowMs: 15 * 60_000 });
@@ -197,7 +197,7 @@ export function createApp({ db, secureCookies = 'auto', trustProxy = false, stat
       return [200, { saved: rowCount === 1 }];
     },
 
-    'GET /api/tailor': async () => [200, { providers: { claude: !!tailors.claude, openai: !!tailors.openai } }],
+    'GET /api/tailor': async () => [200, { providers: { claude: !!tailors.claude, openai: !!tailors.openai, gemini: !!tailors.gemini } }],
 
     'POST /api/tailor': async req => {
       const user = await requireUser(req);

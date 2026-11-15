@@ -42,9 +42,10 @@ Open **Tailor** on a CV card (or **Tailor to job** in the editor), give the job 
 - **The job ad:** paste its text, or (signed in) give its link and **Fetch**: the server reads the page, from its JobPosting data when the site publishes it. Pages behind a login or built only with JavaScript cannot be read; paste their text. The fetch refuses private and local addresses (checked when connecting, also after redirects), only uses the standard ports, and stops at 10 s or 3 MB.
 - **One page:** the letter is written to 230–330 words; when a template's spacing still makes it spill over, spacing and then margins are tightened until it fits. Every cover letter download is fitted the same way.
 
-In step 3 you choose the AI with a radio button, then press **Generate**:
+In step 3 you choose how with a radio button, then press **Generate**:
 
-- **Connected (one click):** **Claude** when the server has `ANTHROPIC_API_KEY` (Claude Opus 5.5, or `TAILOR_MODEL`), **ChatGPT** when it has `OPENAI_API_KEY` (`gpt-5.5`, or `OPENAI_MODEL`); set them in `.env` (see `.env.example`). Both use structured output, run for signed-in users only, 20 tailorings per user per hour; each one is billed to that key. Without a key the option is shown greyed out with the reason.
+- **Quick tailor (no AI, built in):** free, instant, and nothing leaves the browser (`js/quicktailor.js`). It puts the skills the job names first and, in each job, the bullets that match the job's keywords; nothing is reworded. The cover letter is the app's template draft for the CV and job. Always available.
+- **Connected (one click):** **Claude** when the server has `ANTHROPIC_API_KEY` (Claude Opus 5.5, or `TAILOR_MODEL`), **ChatGPT** when it has `OPENAI_API_KEY` (`gpt-5.5`, or `OPENAI_MODEL`), **Gemini** when it has `GEMINI_API_KEY` (`gemini-flash-latest`, or `GEMINI_MODEL`); set them in `.env` (see `.env.example`). Claude and ChatGPT need paid API credit (a ChatGPT or Claude subscription does not cover the API); Gemini has a free tier with daily limits, a free key from aistudio.google.com, and Google may use free-tier data to improve its products. All use structured output and run for signed-in users only, 20 tailorings per user per hour. Without a key the option is shown greyed out with the reason.
 - **On the AI's website (free):** ChatGPT, Claude or Gemini. Generate copies the prompt and opens the site; paste the prompt there, then paste its answer back and it is checked at once. No key and no account needed.
 
 The AI may only rewrite the headline and summary, reword and reorder each job's bullets, and reorder skills. Its answer is then checked against the CV (`js/tailor.js`): a change that uses a number the CV does not contain is left out, skills the CV does not mention are not added, no skill is removed, every job keeps its employer, title, dates and most of its bullets, and the cover letter may use only the CV's facts and numbers, with no placeholders. You review each change before the copy is made; the original CV is never changed. Only CV content is sent to the AI: no name, contact details or photo.
@@ -93,8 +94,8 @@ npm ci
 | Command | What it does |
 |---|---|
 | `npm run lint` | ESLint over the app, tests and scripts |
-| `npm test` | 173 unit tests (Node's built-in runner, no browser) |
-| `npm run test:e2e` | 59 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
+| `npm test` | 175 unit tests (Node's built-in runner, no browser) |
+| `npm run test:e2e` | 60 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
 | `npm run serve` | Static dev server on port 5180 |
 | `npm run load` | HTTP load test against the running container |
 | `node scripts/bench.mjs` | Timings for rendering, coaching, storage |

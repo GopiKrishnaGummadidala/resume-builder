@@ -8,6 +8,8 @@
 //   TAILOR_MODEL   Claude model for tailoring (default claude-opus-5-5)
 //   OPENAI_API_KEY turns on tailoring with ChatGPT (optional)
 //   OPENAI_MODEL   OpenAI model for tailoring (default gpt-5.5)
+//   GEMINI_API_KEY turns on tailoring with Gemini (optional; free tier, key from aistudio.google.com)
+//   GEMINI_MODEL   Gemini model for tailoring (default gemini-flash-latest)
 //   Without either key, tailoring still works through the AI websites (copy and paste).
 import http from 'node:http';
 import { createPool, migrate } from './db.js';
@@ -25,6 +27,7 @@ const secureCookies = env.COOKIE_SECURE === 'true' ? true : env.COOKIE_SECURE ==
 const tailors = {};
 if (env.ANTHROPIC_API_KEY) tailors.claude = (await import('./tailor.js')).createTailor({ model: env.TAILOR_MODEL || 'claude-opus-5-5' });
 if (env.OPENAI_API_KEY) tailors.openai = (await import('./tailor-openai.js')).createOpenAITailor({ model: env.OPENAI_MODEL || 'gpt-5.5' });
+if (env.GEMINI_API_KEY) tailors.gemini = (await import('./tailor-gemini.js')).createGeminiTailor({ apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL || 'gemini-flash-latest' });
 const app = createApp({ db, secureCookies, trustProxy: env.TRUST_PROXY === '1', staticDir: env.STATIC_DIR || '', tailors });
 const port = Number(env.PORT || 3000);
 const server = http.createServer(app);

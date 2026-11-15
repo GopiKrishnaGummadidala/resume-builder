@@ -49,9 +49,9 @@ export const api = {
   docs: () => call('GET', 'docs'),
   putDoc: doc => call('PUT', `docs/${encodeURIComponent(doc.id)}`, { doc }),
   deleteDoc: (id, at) => call('DELETE', `docs/${encodeURIComponent(id)}?at=${encodeURIComponent(at)}`),
-  /** Which AIs the server can tailor with (it has their API keys): {claude, openai}. */
-  tailorStatus: () => call('GET', 'tailor', undefined, { timeout: 4000 }).then(d => ({ claude: !!d?.providers?.claude, openai: !!d?.providers?.openai })),
-  /** A tailoring plan from one of the server's AIs ('claude' or 'openai'); can take a minute or two. */
+  /** Which AIs the server can tailor with (it has their API keys): {claude, openai, gemini}. */
+  tailorStatus: () => call('GET', 'tailor', undefined, { timeout: 4000 }).then(d => ({ claude: !!d?.providers?.claude, openai: !!d?.providers?.openai, gemini: !!d?.providers?.gemini })),
+  /** A tailoring plan from one of the server's AIs ('claude', 'openai' or 'gemini'); can take a minute or two. */
   tailor: (doc, job, provider) => call('POST', 'tailor', { doc, job, provider }, { timeout: 200_000 }).then(d => d.plan),
   /** The job ad on a web page, read by the server: {description, role, company, source, url}. */
   fetchJob: url => call('POST', 'job-from-url', { url }, { timeout: 30_000 }).then(d => d.job),

@@ -3,6 +3,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { sampleResume } from '../../js/data.js';
 import { tailorPrompt, copyPrompt, parseReply, reviewPlan, buildTailored, buildLetter, TAILOR_SCHEMA } from '../../js/tailor.js';
+import { quickPlan } from '../../js/quicktailor.js';
 
 const cv = () => sampleResume('signature');
 /** A plan that keeps everything, so a test changes only what it is about. */
@@ -141,5 +142,32 @@ describe('the tailored documents', () => {
     assert.equal(letter.title, 'Cover Letter - Contoso');
     assert.equal(letter.body.split('\n\n').length, 3);
     assert.deepEqual(letter.tags, tailored.tags);
+  });
+});
+
+describe('quick tailor (no AI)', () => {
+  const job = { description: 'Senior Product Designer at Contoso. Own our design system and component library, accessibility (WCAG), user research, prototyping, Figma.', company: 'Contoso', role: 'Senior Product Designer' };
+
+  test('only reorders: matching skills and bullets first, every word unchanged', () => {
+    const doc = cv();
+    const p = quickPlan(doc, job);
+    assert.deepEqual([...p.skills].sort(), doc.skills.split(', ').sort(), 'the same skills');
+    assert.ok(p.skills.indexOf('Figma') < p.skills.indexOf('Journey Mapping'));
+    for (const e of p.experience) {
+      const own = doc.experience.find(x => x.id === e.id).bullets.split('\n');
+      assert.deepEqual([...e.bullets].sort(), [...own].sort(), 'the same bullets, reordered');
+    }
+    assert.equal(p.summary, doc.summary);
+    assert.equal(p.headline, doc.personal.title);
+  });
+
+  test('writes a template letter for the role and company, and lists keywords, not the company, as missing', () => {
+    const p = quickPlan(cv(), job);
+    assert.match(p.cover_letter.paragraphs[0], /Senior Product Designer position at Contoso/);
+    assert.equal(p.missing_keywords.includes('contoso'), false);
+    assert.ok(p.matched_keywords.includes('figma'));
+    const r = reviewPlan(cv(), p, { checkNumbers: false });
+    assert.equal(r.rejected.length, 0);
+    assert.ok(r.changes.some(c => c.key === 'letter'));
   });
 });

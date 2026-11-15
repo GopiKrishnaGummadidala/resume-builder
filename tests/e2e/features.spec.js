@@ -65,9 +65,12 @@ test.describe('tailor', () => {
     const cvId = await page.locator('[data-role="t-doc"]').inputValue();
     const generate = page.locator('[data-act="t-generate"]');
     await expect(generate).toBeDisabled(); // no job ad yet
-    // As a guest the connected AIs say why they are off, and a website is chosen.
-    await expect(page.locator('[data-role="state-claude"]')).toHaveText(/Needs the Craftfolio server|Sign in to use it|Needs an API key/);
-    await expect(page.locator('input[name="t-ai"][value="web-chatgpt"]')).toBeChecked();
+    // As a guest the connected AIs say why they are off, and Quick tailor (no AI) is chosen.
+    for (const id of ['claude', 'openai', 'gemini']) {
+      await expect(page.locator(`[data-role="state-${id}"]`)).toHaveText(/Needs the Craftfolio server|Sign in to use it|Needs an API key/);
+    }
+    await expect(page.locator('input[name="t-ai"][value="quick"]')).toBeChecked();
+    await page.locator('.t-ai[data-ai="web-chatgpt"]').click();
 
     await page.locator('[data-role="t-job"]').fill(JOB_AD);
     await expect(page.locator('[data-role="t-status"]')).toContainText('words');
@@ -110,6 +113,27 @@ test.describe('tailor', () => {
     for (const card of await page.locator('.doc-card').all()) {
       await expect(card.locator(`a[href="#tailor-${cvId}"]`)).toBeVisible();
     }
+  });
+});
+
+test.describe('quick tailor', () => {
+  test('no AI: reorders by the job keywords at once, writes a template letter, makes both documents', async ({ page }) => {
+    await loadSamples(page);
+    await page.goto('/#tailor');
+    await page.locator('[data-role="t-job"]').fill(JOB_AD);
+    await page.locator('[data-role="t-company"]').fill('Contoso');
+    await page.locator('[data-role="t-role"]').fill('Senior Product Designer');
+    await page.locator('.t-ai[data-ai="quick"]').click();
+    await expect(page.locator('[data-act="t-generate"]')).toHaveText(/now \(no AI\)/);
+    await page.locator('[data-act="t-generate"]').click();
+    await expect(page.locator('.t-review')).toBeVisible();
+    const labels = await page.locator('.t-change .t-pick strong').allTextContents();
+    expect(labels).toContain('Skills order');
+    expect(labels).toContain('Cover letter');
+    await expect(page.locator('.t-letter')).toContainText('Senior Product Designer position at Contoso');
+    await expect(page.locator('.t-rejected')).toHaveCount(0);
+    await page.locator('[data-act="t-save"]').click();
+    await expect(page.locator('.t-made')).toHaveCount(2);
   });
 });
 

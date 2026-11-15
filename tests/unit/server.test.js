@@ -94,7 +94,7 @@ describe('API requests', () => {
   });
 
   test('which AIs are set up is public; tailoring with one that is not is refused', async () => {
-    assert.deepEqual((await call('/api/tailor')).body, { providers: { claude: false, openai: false } });
+    assert.deepEqual((await call('/api/tailor')).body, { providers: { claude: false, openai: false, gemini: false } });
     assert.equal((await call('/api/health')).body.ok, true);
   });
 

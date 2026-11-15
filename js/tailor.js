@@ -158,12 +158,15 @@ const strs = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string').map(x
  * @returns {{changes: object[], rejected: {label: string, reason: string}[], found: {company: string, role: string}, matched: string[], missing: string[], notes: string[]}}
  *   found: the company and role the model read in the job description (used when the person left them empty)
  *   each change: {key, section, label, before, after}, before/after as text (bullets: arrays)
+ * @param {{checkNumbers?: boolean}} [opts] checkNumbers: false for a plan made by this app itself (Quick
+ *   tailor), whose letter states years worked out from the CV's dates; an AI's plan is always checked
  */
-export function reviewPlan(doc, plan) {
+export function reviewPlan(doc, plan, { checkNumbers = true } = {}) {
   const allowed = cvNumbers(doc);
   const changes = [];
   const rejected = [];
   const check = (label, text) => {
+    if (!checkNumbers) return true;
     const extra = strayNumbers(text, allowed);
     if (extra.length) { rejected.push({ label, reason: `uses ${extra.join(', ')}, which your CV does not say` }); return false; }
     return true;

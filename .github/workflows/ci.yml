@@ -86,7 +86,7 @@ jobs:
           check /api/health     200 application/json  # nginx passes /api/ to the api container
           check /api/auth/me    200 application/json
           check /api/docs       401 application/json  # documents need a session
-          [ "$(curl -s "$base/api/tailor")" = '{"providers":{"claude":false,"openai":false}}' ] || { echo "no AI keys expected in CI"; exit 1; }
+          [ "$(curl -s "$base/api/tailor")" = '{"providers":{"claude":false,"openai":false,"gemini":false}}' ] || { echo "no AI keys expected in CI"; exit 1; }
           headers=$(curl -sI "$base/")
           for h in content-security-policy x-content-type-options x-frame-options referrer-policy; do
             echo "$headers" | grep -qi "^$h:" || { echo "missing header $h"; exit 1; }

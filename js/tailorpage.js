@@ -12,6 +12,7 @@ import { blankLetter } from './data.js';
 import { miniPreview, fitPages, pageObserver } from './preview.js';
 import { copyPrompt, parseReply, reviewPlan, buildTailored, buildLetter, JOB_MAX_CHARS } from './tailor.js';
 import { fileToDoc } from './importer.js';
+import { quickPlan } from './quicktailor.js';
 import { fitOnePage } from './fit.js';
 import { downloadPdf } from './editor.js';
 
@@ -21,8 +22,10 @@ const URL_ONLY = /^https?:\/\/\S+$/i;
 
 /** The AIs to choose from. connected: runs on the server with its API key; else the AI's website. */
 const AIS = [
+  { id: 'quick', name: 'Quick tailor (no AI)', sub: 'Free, instant, private: what the job asks for comes first; nothing is reworded', builtIn: true },
   { id: 'claude', name: 'Claude', sub: 'Anthropic · one click, about a minute', connected: true },
   { id: 'openai', name: 'ChatGPT', sub: 'OpenAI · one click, about a minute', connected: true },
+  { id: 'gemini', name: 'Gemini', sub: 'Google · free tier, one click, about a minute', connected: true },
   { id: 'web-chatgpt', name: 'ChatGPT website', sub: 'chatgpt.com · free, you paste its answer back', url: 'https://chatgpt.com/', site: 'ChatGPT' },
   { id: 'web-claude', name: 'Claude website', sub: 'claude.ai · free, you paste its answer back', url: 'https://claude.ai/new', site: 'Claude' },
   { id: 'web-gemini', name: 'Gemini website', sub: 'gemini.google.com · free, you paste its answer back', url: 'https://gemini.google.com/app', site: 'Gemini' },
@@ -109,10 +112,12 @@ export function tailorPage(pre) {
     <div class="t-step">
       <h2><span class="t-num">3</span>Choose your AI and generate</h2>
       <div class="t-ais" role="radiogroup" aria-label="AI to use">
-        <p class="t-ais-h">Connected: one click, runs on this server</p>
+        <p class="t-ais-h">Built in: free, nothing leaves your computer</p>
+        ${AIS.filter(a => a.builtIn).map(radio).join('')}
+        <p class="t-ais-h">Connected AI: one click, runs on this server</p>
         ${AIS.filter(a => a.connected).map(radio).join('')}
-        <p class="t-ais-h">On the AI's website: free, no key needed</p>
-        ${AIS.filter(a => !a.connected).map(radio).join('')}
+        <p class="t-ais-h">AI on its website: free with your account, you paste its answer back</p>
+        ${AIS.filter(a => a.url).map(radio).join('')}
       </div>
       <div class="t-go">
         <button class="btn btn-primary btn-lg" data-act="t-generate" disabled>✦ Generate tailored CV${letterOn ? ' &amp; cover letter' : ''}</button>
@@ -260,7 +265,8 @@ export function mountTailor(account) {
     const ai = chosen();
     const ok = ready();
     generateBtn.disabled = !ok || !ai;
-    generateBtn.innerHTML = `✦ Generate tailored CV${field('t-letter').checked ? ' &amp; cover letter' : ''}${ai ? ` with ${esc(ai.name)}` : ''}`;
+    const what = `tailored CV${field('t-letter').checked ? ' &amp; cover letter' : ''}`;
+    generateBtn.innerHTML = ai?.builtIn ? `✦ Make ${what} now (no AI)` : `✦ Generate ${what}${ai ? ` with ${esc(ai.name)}` : ''}`;
     field('t-wait').textContent = !ok ? 'Add the job ad in step 1 first.' : !ai ? 'Choose an AI above.' : '';
   }
   $$('input[name="t-ai"]', root).forEach(input => input.addEventListener('change', () => {
@@ -278,32 +284,34 @@ export function mountTailor(account) {
     if (input) input.disabled = !usable;
     $(`.t-ai[data-ai="${id}"]`, root)?.classList.toggle('disabled', !usable);
   };
+  // The last choice if it can be used; else the first connected AI that is ready; else Quick tailor.
   const pickDefault = () => {
     const want = prefs().ai;
-    const usable = AIS.filter(a => !$(`input[name="t-ai"][value="${a.id}"]`, root).disabled).map(a => a.id);
-    choose(usable.includes(want) ? want : usable[0]);
+    const usable = AIS.filter(a => !$(`input[name="t-ai"][value="${a.id}"]`, root).disabled);
+    choose(usable.some(a => a.id === want) ? want : (usable.find(a => a.connected) || usable[0]).id);
     refresh();
   };
   const noKey = 'Needs an API key in the server\'s .env file';
   if (!account.available) {
-    for (const id of ['claude', 'openai']) setState(id, 'Needs the Craftfolio server', false);
+    for (const id of ['claude', 'openai', 'gemini']) setState(id, 'Needs the Craftfolio server', false);
     pickDefault();
   } else {
     api.tailorStatus().then(providers => {
-      for (const id of ['claude', 'openai']) {
+      for (const id of ['claude', 'openai', 'gemini']) {
         if (!providers[id]) setState(id, noKey, false);
         else if (!account.user) setState(id, '<a href="#login">Sign in</a> to use it', false);
         else setState(id, '✓ Ready', true);
       }
       pickDefault();
     }).catch(() => {
-      for (const id of ['claude', 'openai']) setState(id, 'Could not reach the server', false);
+      for (const id of ['claude', 'openai', 'gemini']) setState(id, 'Could not reach the server', false);
       pickDefault();
     });
   }
 
-  function show(base, j, plan) {
-    const checked = reviewPlan(base, plan);
+  /** @param {object} [opts] reviewPlan options: Quick tailor's own letter skips the number check */
+  function show(base, j, plan, opts) {
+    const checked = reviewPlan(base, plan, opts);
     // Company and role left empty: take them from the job ad, as the AI read them.
     for (const key of ['company', 'role']) {
       if (!j[key] && checked.found[key]) { j[key] = checked.found[key]; field(`t-${key}`).value = checked.found[key]; }
@@ -326,6 +334,11 @@ export function mountTailor(account) {
   async function generate() {
     const ai = chosen();
     if (!ai || !ready()) return;
+    if (ai.builtIn) {
+      // Quick tailor: worked out here, at once; nothing leaves the browser.
+      show(cv(), job(), quickPlan(cv(), job()), { checkNumbers: false });
+      return;
+    }
     if (ai.connected) {
       const base = cv();
       const j = job();
