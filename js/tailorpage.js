@@ -261,7 +261,9 @@ export function mountTailor(account) {
     if (input && !input.disabled) input.checked = true;
     $$('.t-ai', root).forEach(l => l.classList.toggle('on', !!$('input', l).checked));
   }
+  let running = false; // a connected AI is working: the button keeps saying so and stays off
   function refresh() {
+    if (running) return;
     const ai = chosen();
     const ok = ready();
     generateBtn.disabled = !ok || !ai;
@@ -342,6 +344,8 @@ export function mountTailor(account) {
     if (ai.connected) {
       const base = cv();
       const j = job();
+      if (running) return;
+      running = true;
       generateBtn.disabled = true;
       generateBtn.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${esc(ai.name)} is tailoring… about a minute`;
       try {
@@ -351,6 +355,7 @@ export function mountTailor(account) {
       } catch (err) {
         toast(err.message, 6000);
       } finally {
+        running = false;
         refresh();
       }
       return;

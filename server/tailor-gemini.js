@@ -7,7 +7,7 @@ import { tailorPrompt, TAILOR_SCHEMA } from '../js/tailor.js';
 import { TailorError } from './tailor.js';
 
 /** @returns {(doc: object, job: object) => Promise<object>} resolves to the model's plan */
-export function createGeminiTailor({ apiKey, model = 'gemini-flash-latest' } = {}) {
+export function createGeminiTailor({ apiKey, model = 'gemini-3.5-flash' } = {}) {
   const ai = new GoogleGenAI({ apiKey });
   return async function tailor(doc, job) {
     const { system, user } = tailorPrompt(doc, job);
