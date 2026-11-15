@@ -70,7 +70,9 @@ async function findPhoto(pdfjs, page) {
       }
     });
     let best = null;
-    for (const f of found.filter(f => f.top > height / 2 && f.drawnWidth < width * 0.4)) {
+    // A photo is drawn at least 40pt wide; smaller images are icons (drawn sharp at a high resolution,
+    // so their pixel size alone would pass for a photo).
+    for (const f of found.filter(f => f.top > height / 2 && f.drawnWidth >= 40 && f.drawnWidth < width * 0.4)) {
       const img = await new Promise(resolve => {
         const get = objs => { try { objs.get(f.name, resolve); return true; } catch { return false; } };
         if (!get(page.objs) && !get(page.commonObjs)) resolve(null);
@@ -286,11 +288,12 @@ const HEADINGS = [
   ['summary', /^(professional\s+)?(summary|profile|about( me)?|objective|career objective)$/i],
   ['experience', /^(work\s+|professional\s+)?(experience|employment( history)?|work history|career history)$/i],
   ['education', /^(education|academic background|qualifications)$/i],
-  ['skills', /^((technical|core|key)\s+)?(skills|competencies|expertise|areas of expertise)$/i],
-  ['projects', /^(projects|selected projects|personal projects)$/i],
-  ['certifications', /^(certifications?|certificates?|licenses?( & certifications)?|courses)$/i],
+  // Two-part headings are common too: "Skills & competencies", "Certificates & training"…
+  ['skills', /^((technical|core|key)\s+)?(skills|competencies|expertise|areas of expertise)(\s+(&|and)\s+(competencies|skills|tools|technologies|expertise))?$/i],
+  ['projects', /^(projects|selected projects|personal projects|side projects|volunteer(ing)?(\s+(&|and)\s+(personal\s+)?projects)?)$/i],
+  ['certifications', /^(certifications?|certificates?|licenses?|courses|training)(\s+(&|and)\s+(training|courses|certifications?|certificates?|licenses?))?$/i],
   ['languages', /^languages?$/i],
-  ['achievements', /^(achievements?|accomplishments?|awards?|honou?rs?( & awards)?)$/i],
+  ['achievements', /^(achievements?|accomplishments?|awards?|honou?rs?)(\s+(&|and)\s+(awards?|honou?rs?|achievements?))?$/i],
   ['interests', /^(interests?|hobbies|hobbies (&|and) interests)$/i],
 ];
 
@@ -498,8 +501,22 @@ function parseDatedEntries(lines) {
 const entryLine = parts => parts.map(p => p.replace(/\|/g, '/')).join(' | ').replace(/( \| )+$/, '');
 
 function parseLanguages(lines) {
+  // Side by side, as columns: a row of names with a row of levels under it ("English⇥Spanish" then
+  // "Native⇥Professional working"). Pair them by column first.
+  const src = lines.filter(Boolean);
+  const rows = [];
+  for (let i = 0; i < src.length; i++) {
+    const names = src[i].split('\t');
+    const levels = (src[i + 1] || '').split('\t');
+    if (names.length > 1 && names.length === levels.length && levels.some(c => languageLevel(plain(c)))) {
+      names.forEach((name, k) => rows.push(`${plain(name).trim()} – ${plain(levels[k]).trim()}`));
+      i++;
+    } else {
+      rows.push(src[i]);
+    }
+  }
   // One per line, or several on a line: "English – Native · Spanish – Professional working".
-  const text = lines.filter(Boolean).flatMap(l => l.split(/\t|\s+·\s+|\s*;\s*/)).map(s => s.trim()).filter(Boolean);
+  const text = rows.flatMap(l => l.split(/\t|\s+·\s+|\s*;\s*/)).map(s => s.trim()).filter(Boolean);
   const out = [];
   text.forEach(raw => {
     const l = plain(raw.replace(BULLET, ''));

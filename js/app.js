@@ -423,7 +423,7 @@ function route() {
   else if (view === 'ats') { html = atsPage(); mount = mountAts; }
   else if (view === 'login' || view === 'signup') { html = authPage(view); mount = () => $('.auth-form input')?.focus(); }
   else if (view === 'match') { html = matchPage(arg); mount = mountMatch; }
-  else if (view === 'tailor') { html = tailorPage(arg, account); mount = () => mountTailor(account); }
+  else if (view === 'tailor') { html = tailorPage(arg); mount = () => mountTailor(account); }
   else html = `<section class="section"><h1>Page not found</h1><a class="btn btn-primary" href="#">Home</a></section>`;
   pageObserver.disconnect();
   app.innerHTML = html;

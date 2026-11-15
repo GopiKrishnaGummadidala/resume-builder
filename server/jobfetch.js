@@ -135,7 +135,7 @@ export function htmlToText(html) {
     .replace(/<(br|\/p|\/div|\/h[1-6]|\/li|\/ul|\/ol|\/section|\/article|\/tr)[^>]*>/gi, '\n')
     .replace(/<\/?(b|strong|i|em|u|span|a|small|mark|code|sup|sub)\b[^>]*>/gi, '') // inline: no extra space
     .replace(/<[^>]+>/g, ' '))
-    .replace(/[ \t ]+/g, ' ')
+    .replace(/[ \t\u00a0]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n+- /g, '\n- ')
     .replace(/\n{3,}/g, '\n\n')

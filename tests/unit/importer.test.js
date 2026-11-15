@@ -213,3 +213,24 @@ describe('summary', () => {
     assert.equal(underHeading.summary, 'Built **streaming** pipelines.');
   });
 });
+
+describe('headings and side-by-side languages', () => {
+  test('two-part headings are recognised', () => {
+    const r = parseResumeText([
+      'Sam Lee', '',
+      'Skills & competencies', 'Go, Python', '',
+      'Certificates & training', 'AWS Solutions Architect | Amazon | 2021', '',
+      'Honors & awards', 'Hackathon winner', '2020', '',
+      'Volunteer & personal projects', 'Open-source parser', 'A parser used by 300 people',
+    ].join('\n'));
+    assert.equal(r.skills, 'Go, Python');
+    assert.match(r.certifications, /^AWS Solutions Architect/);
+    assert.equal(r.achievements[0].title, 'Hackathon winner');
+    assert.equal(r.projects[0].name, 'Open-source parser');
+  });
+
+  test('languages laid out as columns (names, then levels underneath) are paired by column', () => {
+    const r = parseResumeText('Sam Lee\n\nLanguages\n**English**\t**German**\tFrench\nNative\tFull professional proficiency\tElementary');
+    assert.equal(r.languages, 'English | Native\nGerman | Full professional proficiency\nFrench | Elementary');
+  });
+});

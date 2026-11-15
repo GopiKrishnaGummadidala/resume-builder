@@ -60,7 +60,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - name: Build and start
+      - name: A throwaway database password for this run
+        run: echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" > .env
+      - name: Build and start (web, api, db)
         run: docker compose up -d --build --wait
       - name: Smoke test (status codes, content types, security headers)
         run: |
@@ -81,11 +83,17 @@ jobs:
           check /healthz        200 text/plain
           check /nope           404 text/html
           check /js/profile.local.js 404 text/html   # private details are never in a CI-built image
+          check /api/health     200 application/json  # nginx passes /api/ to the api container
+          check /api/auth/me    200 application/json
+          check /api/docs       401 application/json  # documents need a session
+          [ "$(curl -s "$base/api/tailor")" = '{"providers":{"claude":false,"openai":false}}' ] || { echo "no AI keys expected in CI"; exit 1; }
           headers=$(curl -sI "$base/")
           for h in content-security-policy x-content-type-options x-frame-options referrer-policy; do
             echo "$headers" | grep -qi "^$h:" || { echo "missing header $h"; exit 1; }
           done
           [ "$(docker exec craftfolio id -u)" != "0" ] || { echo "container runs as root"; exit 1; }
+          [ "$(docker exec craftfolio-api id -u)" != "0" ] || { echo "api container runs as root"; exit 1; }
+          [ -z "$(docker port craftfolio-db)" ] || { echo "the database must not be published on the host"; exit 1; }
       - uses: actions/setup-node@v5
         with:
           node-version: 22

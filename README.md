@@ -93,14 +93,14 @@ npm ci
 | Command | What it does |
 |---|---|
 | `npm run lint` | ESLint over the app, tests and scripts |
-| `npm test` | 145 unit tests (Node's built-in runner, no browser) |
-| `npm run test:e2e` | 52 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
+| `npm test` | 173 unit tests (Node's built-in runner, no browser) |
+| `npm run test:e2e` | 59 browser tests (Playwright; run `npx playwright install chromium` once). If your machine blocks Playwright's own browser, set `PW_CHANNEL=msedge` or `PW_CHANNEL=chrome` to use an installed one. |
 | `npm run serve` | Static dev server on port 5180 |
 | `npm run load` | HTTP load test against the running container |
 | `node scripts/bench.mjs` | Timings for rendering, coaching, storage |
 | `node scripts/measure-pdf.mjs` | PDF size and build time per encoder setting |
 
-CI (GitHub Actions) runs lint, unit tests, the browser tests, and a Docker build with smoke checks and the browser tests against the container.
+CI (GitHub Actions) runs lint, unit tests, the browser tests, and a Docker build of all three containers (web, api, PostgreSQL, with a throwaway database password) with smoke checks of the site and the API and the browser tests against it.
 
 ## Documentation
 

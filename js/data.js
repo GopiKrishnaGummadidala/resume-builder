@@ -72,6 +72,7 @@ export function blankResume(templateId = DEFAULT_TEMPLATE) {
     id: uid(),
     type: 'resume',
     title: 'Untitled CV',
+    tags: [],
     updatedAt: Date.now(),
     templateId,
     theme: DEFAULT_THEME(),
@@ -158,6 +159,7 @@ export function blankLetter(templateId = DEFAULT_TEMPLATE, fromResume = null) {
     id: uid(),
     type: 'cover',
     title: LETTER_TITLE,
+    tags: [],
     updatedAt: Date.now(),
     templateId: fromResume ? fromResume.templateId : templateId,
     theme: fromResume ? { ...DEFAULT_THEME(), ...fromResume.theme } : DEFAULT_THEME(),
@@ -381,6 +383,6 @@ export function normalizeDoc(raw) {
     languages: str(raw.languages, LIMITS.long),
     achievements: list(raw.achievements, ['title', 'date'], ['description']),
     interests: str(raw.interests, LIMITS.long),
-    sections: cleanSections(raw.sections),
+    ...(cleanSections(raw.sections) ? { sections: cleanSections(raw.sections) } : {}), // only when the CV has its own order
   };
 }

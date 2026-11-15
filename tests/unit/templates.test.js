@@ -108,7 +108,8 @@ describe('renderResume', () => {
     assert.deepEqual(PAGE, { W: 794, H: 1123 });
     for (const t of TEMPLATES) {
       const html = renderResume(sampleResume(t.id));
-      assert.ok(html.startsWith(`<div class="page tpl-${t.id}"`), t.id);
+      // Its own class first; a variant (Signature One) also wears its base template's class.
+      assert.match(html, new RegExp(`^<div class="page tpl-${t.id}(?: tpl-[\\w-]+)?"`), t.id);
       for (const part of ['Jordan Rivera', 'experience', 'education', 'skills', 'Brightline Analytics']) assert.ok(html.toLowerCase().includes(part.toLowerCase()), `${t.id}: ${part}`);
     }
   });
@@ -180,11 +181,11 @@ const pageStyle = html => html.match(/<div class="page [^"]*" style="([^"]*)"/)[
 
 describe('templates list', () => {
   test('every template has a known layout, header and skills style', () => {
-    assert.equal(TEMPLATES.length, 14);
+    assert.equal(TEMPLATES.length, 16);
     assert.equal(new Set(TEMPLATES.map(t => t.id)).size, TEMPLATES.length);
     for (const t of TEMPLATES) {
       assert.ok(['single', 'side-left', 'side-right', 'profile'].includes(t.layout), t.id);
-      assert.ok(['plain', 'split', 'sidebar', 'banner', 'stacked'].includes(t.header), t.id);
+      assert.ok(['plain', 'split', 'sidebar', 'banner', 'stacked', 'portrait'].includes(t.header), t.id);
       assert.ok(['inline', 'chips', 'list'].includes(t.skills), t.id);
       assert.ok(t.name && t.desc && t.tags.length, t.id);
     }
@@ -412,7 +413,10 @@ describe('Signature header', () => {
     const html = renderResume(r);
     const head = html.slice(html.indexOf('<header class="s-head'), html.indexOf('</header>'));
     assert.ok(head.indexOf('r-name') < head.indexOf('s-band'), 'name first');
-    assert.match(head, /<div class="s-band"><p class="b-summary">Designer with <strong>seven years<\/strong> of experience\.<\/p><\/div>/);
+    assert.match(head, /<div class="s-band"><div class="b-sum-h">Profile<\/div><p class="b-summary">Designer with <strong>seven years<\/strong> of experience\.<\/p><\/div>/);
+    // The "Profile" heading (for ATS parsers) can be turned off in Layout.
+    const plain = renderResume({ ...r, theme: { ...r.theme, profileHeading: false } });
+    assert.match(plain, /<div class="s-band"><p class="b-summary">Designer with/);
     assert.ok(head.includes('b-contact'));
     assert.equal(head.includes('r-photo'), false, 'no photo, no image');
     r.personal.photo = 'data:image/jpeg;base64,/9j/4AAQ';

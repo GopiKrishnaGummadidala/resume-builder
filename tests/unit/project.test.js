@@ -53,7 +53,7 @@ describe('modules', () => {
   });
 
   test('lower layers never import the views', () => {
-    const views = ['app.js', 'editor.js', 'tools.js', 'preview.js'];
+    const views = ['app.js', 'editor.js', 'tools.js', 'preview.js', 'tailorpage.js'];
     for (const f of files.filter(f => !views.includes(f))) {
       for (const [, dep] of read(`js/${f}`).matchAll(/from '\.\/([^']+)'/g)) {
         assert.equal(views.includes(dep), false, `${f} must not import the view module ${dep}`);

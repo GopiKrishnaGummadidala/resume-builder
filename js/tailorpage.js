@@ -47,8 +47,8 @@ function letterPreview(cv, tpl, company) {
   return miniPreview(l);
 }
 
-/** @param {string} pre id of the CV to start with  @param {{available: boolean, user: object|null}} account */
-export function tailorPage(pre, account) {
+/** @param {string} pre id of the CV to start with */
+export function tailorPage(pre) {
   const resumes = store.docs.filter(d => d.type !== 'cover');
   if (!resumes.length) {
     return `<section class="section narrow tailor-empty">

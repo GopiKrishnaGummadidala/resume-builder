@@ -441,7 +441,7 @@ function pageWrap(doc, inner) {
   const numbered = templateOf(doc.templateId).pageNumbers ? ' data-page-numbers' : '';
   const icons = doc.theme.icons === false ? ' no-icons' : '';
   const variantOf = templateOf(doc.templateId).css; // a variant also wears its base template's styles
-  const cls = `${variantOf ? `tpl-${esc(variantOf)} ` : ''}tpl-${esc(doc.templateId)}`;
+  const cls = `tpl-${esc(doc.templateId)}${variantOf ? ` tpl-${esc(variantOf)}` : ''}`;
   return `<div class="page ${cls}${icons}"${numbered} style="${style}">${inner}</div>`;
 }
 

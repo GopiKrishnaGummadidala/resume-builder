@@ -29,6 +29,12 @@ test.afterEach(async ({}, testInfo) => {
 });
 
 const field = (page, path) => page.locator(`.ed-form [data-path="${path}"]`);
+
+/** A document card's action under its "•••" menu (Duplicate, New cover letter, Delete). */
+async function cardAction(card, act) {
+  await card.locator('.doc-more > summary').click();
+  await card.locator(`.doc-more-pop [data-act="${act}"]`).click();
+}
 const live = page => page.locator('#live');
 
 async function newLetter(page) {
@@ -43,7 +49,9 @@ test.describe('navigation', () => {
   test('every view opens from the header', async ({ page }) => {
     const nav = page.locator('.nav');
     await nav.getByRole('link', { name: 'Templates' }).click();
-    await expect(page.locator('.tpl-card')).toHaveCount(14);
+    await expect(page.locator('.tpl-card')).toHaveCount(16);
+    await nav.getByRole('link', { name: 'Tailor' }).click();
+    await expect(page.getByRole('heading', { name: /Tailor your CV/ })).toBeVisible();
     await nav.getByRole('link', { name: 'ATS Checker' }).click();
     await expect(page.getByRole('heading', { name: 'ATS Resume Checker' })).toBeVisible();
     await nav.getByRole('link', { name: 'Job Matcher' }).click();
@@ -57,9 +65,9 @@ test.describe('navigation', () => {
     await page.locator('[data-filter="two-col"]').click();
     await expect(page.locator('.tpl-card')).toHaveCount(5);
     await page.locator('[data-filter="photo"]').click();
-    await expect(page.locator('.tpl-card')).toHaveCount(4);
+    await expect(page.locator('.tpl-card')).toHaveCount(6);
     await page.locator('[data-filter="all"]').click();
-    await expect(page.locator('.tpl-card')).toHaveCount(14);
+    await expect(page.locator('.tpl-card')).toHaveCount(16);
   });
 
   test('an unknown document id shows a not-found message', async ({ page }) => {
@@ -170,7 +178,7 @@ test.describe('cover letter', () => {
   test('"Draft from a CV" writes a body from the selected CV', async ({ page }) => {
     await page.goto('/#documents');
     await page.locator('[data-act="samples"]').click();
-    await page.locator('[data-act="letter-from"]').click();
+    await cardAction(page.locator('.doc-card', { has: page.locator('[data-act="letter-from"]') }), 'letter-from');
     await field(page, 'job.role').fill('Lead Designer');
     await field(page, 'recipient.company').fill('Acme');
     await page.locator('[data-act="draft"]').click();
@@ -247,12 +255,12 @@ test.describe('documents', () => {
     await page.goto('/#documents');
     await page.locator('[data-act="samples"]').click();
     await expect(page.locator('.doc-card')).toHaveCount(2);
-    await page.locator('[data-act="dup"]').first().click();
+    await cardAction(page.locator('.doc-card').first(), 'dup');
     await expect(page.locator('.doc-card')).toHaveCount(3);
-    await page.locator('[data-act="del"]').first().click();
+    await cardAction(page.locator('.doc-card').first(), 'del');
     await page.locator('.modal [data-cancel]').click();
     await expect(page.locator('.doc-card')).toHaveCount(3);
-    await page.locator('[data-act="del"]').first().click();
+    await cardAction(page.locator('.doc-card').first(), 'del');
     await page.locator('.modal [data-ok]').click();
     await expect(page.locator('.doc-card')).toHaveCount(2);
   });
@@ -299,7 +307,7 @@ test.describe('two tabs', () => {
     await page.goto('/#documents');
     await expect(page.locator('.doc-card')).toHaveCount(2); // neither tab lost the other's document
 
-    await page.locator('.doc-card', { hasText: 'Untitled CV' }).locator('[data-act="del"]').click();
+    await cardAction(page.locator('.doc-card', { hasText: 'Untitled CV' }), 'del');
     await page.locator('.modal [data-ok]').click();
     await expect(other.getByText('Document not found')).toBeVisible(); // tab 2 was editing the deleted CV
     await other.goto('/#documents');

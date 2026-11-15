@@ -438,7 +438,9 @@ ul.l-lines > li:only-child:empty::before { content: 'Achievement: what you did a
 .tpl-horizon [data-sec="education"] > .r-body, .tpl-horizon [data-sec="achievements"] > .r-body, .tpl-horizon [data-sec="projects"] > .r-body, .tpl-horizon .r-entries {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8pt 22pt; align-items: start; }
 .tpl-horizon [data-sec="education"] .r-item, .tpl-horizon [data-sec="achievements"] .r-item, .tpl-horizon [data-sec="projects"] .r-item { display: flex; flex-direction: column; margin: 0; }
-.tpl-horizon [data-sec="education"] .r-row, .tpl-horizon [data-sec="achievements"] .r-row, .tpl-horizon [data-sec="projects"] .r-row { display: contents; }
+.tpl-horizon [data-sec="education"] .r-row { display: contents; }
+/* Awards and projects: the date on the title line, so the title, date and description read in that order */
+.tpl-horizon [data-sec="achievements"] .r-row, .tpl-horizon [data-sec="projects"] .r-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10pt; }
 .tpl-horizon [data-sec="education"] .r-row > strong { order: 1; font-size: 11pt; line-height: 14pt; color: var(--ink); }
 .tpl-horizon [data-sec="education"] .r-sub { order: 2; display: flex; justify-content: flex-start; gap: 0 6pt; font-style: normal; font-size: 10.5pt; line-height: 14pt; color: var(--ink); }
 .tpl-horizon [data-sec="education"] .r-sub > span:last-child:not(:empty)::before { content: "\B7"; margin-right: 6pt; color: #6b7280; }
@@ -450,7 +452,7 @@ ul.l-lines > li:only-child:empty::before { content: 'Achievement: what you did a
 .tpl-horizon .r-entries li { display: flex; flex-direction: column; margin: 0; }
 .tpl-horizon .r-entries .r-e-t { font-size: 10.5pt; line-height: 13.5pt; color: var(--ink); }
 .tpl-horizon .r-entries .r-e-s { font-size: 8.8pt; line-height: 11.8pt; font-style: italic; color: #6b7280; opacity: 1; }
-.tpl-horizon .r-entries .r-e-d { order: -1; font-size: 9pt; line-height: 12pt; font-style: italic; color: var(--accent); opacity: 1; }
+.tpl-horizon .r-entries .r-e-d { font-size: 9pt; line-height: 12pt; font-style: italic; color: var(--accent); opacity: 1; }
 
 /* Skills as chips, languages as rings, interests in a row */
 .tpl-horizon .r-chips { gap: 5pt; }

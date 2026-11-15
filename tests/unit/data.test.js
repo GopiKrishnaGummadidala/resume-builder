@@ -85,7 +85,7 @@ describe('model', () => {
     const l = blankLetter(undefined, cv);
     assert.equal(l.personal.name, cv.personal.name);
     assert.equal(l.templateId, 'tech');
-    assert.deepEqual(l.theme, cv.theme);
+    assert.deepEqual(l.theme, { ...cv.theme, icons: true, fullLinks: true, profileHeading: true });
     l.personal.name = 'Changed';
     assert.notEqual(cv.personal.name, 'Changed', 'copies, not shares');
   });
@@ -152,14 +152,14 @@ describe('page settings', () => {
 
   test('documents saved before these settings existed get the defaults', () => {
     const old = { ...sampleResume(), theme: { color: '#2563eb', font: 'inter' } };
-    assert.deepEqual(normalizeDoc(old).theme, { color: '#2563eb', font: 'inter', spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN, size: 'a4' });
+    assert.deepEqual(normalizeDoc(old).theme, { color: '#2563eb', font: 'inter', spacing: DEFAULT_SPACING, margin: DEFAULT_MARGIN, size: 'a4', icons: true, fullLinks: true, profileHeading: true });
     assert.equal(pageSize(old), PAGE_SIZES.a4);
     assert.deepEqual(pageScale(old), { spacing: 1, margin: 1 });
   });
 
   test('valid settings are kept', () => {
     const doc = normalizeDoc({ ...sampleResume(), theme: { color: '#2563eb', font: 'inter', spacing: 7, margin: 1, size: 'letter' } });
-    assert.deepEqual(doc.theme, { color: '#2563eb', font: 'inter', spacing: 7, margin: 1, size: 'letter' });
+    assert.deepEqual(doc.theme, { color: '#2563eb', font: 'inter', spacing: 7, margin: 1, size: 'letter', icons: true, fullLinks: true, profileHeading: true });
     assert.deepEqual({ W: pageSize(doc).W, H: pageSize(doc).H }, { W: 816, H: 1056 });
     assert.deepEqual(pageScale(doc), { spacing: SPACING_STEPS[6], margin: MARGIN_STEPS[0] });
   });

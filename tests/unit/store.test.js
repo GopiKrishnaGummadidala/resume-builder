@@ -214,3 +214,41 @@ describe('createStore', () => {
     assert.equal(createStore(backend).docs.length, 1);
   });
 });
+
+describe('accounts', () => {
+  test('use() switches to another storage entry (signing in or out) and loads what it holds', () => {
+    const guest = fakeBackend();
+    const account = fakeBackend();
+    account.raw = JSON.stringify(state([doc('acct0001', 5, 'Account CV')]));
+    const store = createStore(guest);
+    store.add(doc('guest001', 1, 'Guest CV'));
+    store.use(account);
+    assert.deepEqual(store.docs.map(d => d.title), ['Account CV']);
+    store.use(guest);
+    assert.deepEqual(store.docs.map(d => d.title), ['Guest CV'], 'the guest copy is untouched');
+  });
+
+  test('mergeRemote() folds in the server\'s copy by the same rules as tabs, and reports what changed', () => {
+    const store = createStore(fakeBackend());
+    store.add(doc('keep0001', 1, 'Mine'));
+    const changed = [];
+    store.subscribe(ids => changed.push(...ids));
+    const ids = store.mergeRemote({ docs: [doc('remote01', 2, 'From another device')], deleted: {} });
+    assert.deepEqual([...ids], ['remote01']);
+    assert.deepEqual(changed, ['remote01']);
+    assert.deepEqual(store.docs.map(d => d.id).sort(), ['keep0001', 'remote01']);
+    store.mergeRemote({ docs: [], deleted: { keep0001: Date.now() + 1000 } });
+    assert.deepEqual(store.docs.map(d => d.id), ['remote01'], 'a newer deletion from the server wins');
+    assert.ok(store.deleted.keep0001);
+  });
+
+  test('onSaved() is told after every write, so the account sync can send the change', () => {
+    const store = createStore(fakeBackend());
+    let saves = 0;
+    store.onSaved(() => { saves += 1; });
+    const d = store.add(doc('save0001', 1));
+    store.update(d);
+    store.remove(d.id);
+    assert.equal(saves, 3);
+  });
+});
